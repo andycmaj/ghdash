@@ -9,6 +9,7 @@ import { wrapText } from "@/utils/wrap";
 import { canMerge } from "@/github/status-utils";
 import { PRStatus, type MergeBlocker } from "@/github/types";
 import { Marker, type SectionProps } from "./common";
+import { mergeQueueStateLabel } from "./merge-queue-section";
 
 export function MergeabilitySection(props: SectionProps) {
   const { state } = useGithub();
@@ -40,7 +41,7 @@ export function MergeabilitySection(props: SectionProps) {
               ⏳ In merge queue
             </text>
             <text fg={theme.textMuted}>
-              {mergeQueueLabel(pr()!.mergeQueue!.state)}
+              {mergeQueueStateLabel(pr()!.mergeQueue!.state)}
               {pr()!.mergeQueue!.position != null
                 ? ` · position ${pr()!.mergeQueue!.position}`
                 : ""}
@@ -77,10 +78,6 @@ export function MergeabilitySection(props: SectionProps) {
       </Match>
     </Switch>
   );
-}
-
-function mergeQueueLabel(state: string): string {
-  return state.toLowerCase().replace(/_/g, " ");
 }
 
 function BlockerRow(props: {

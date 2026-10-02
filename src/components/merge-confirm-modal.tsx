@@ -9,6 +9,7 @@ import { useGithub } from "../context/github";
 import { useToast } from "../context/toast";
 import { Modal } from "./modal/modal";
 import { ModalHeader } from "./modal/modal-header";
+import { ModalCommands } from "@andycmaj/opentui-app";
 
 interface MergeConfirmModalProps {
   onClose: () => void;
@@ -33,15 +34,16 @@ export function MergeConfirmModal(props: MergeConfirmModalProps) {
     }
   }
 
-  function handleKeyboard(evt: { name: string; preventDefault: () => void }) {
-    if (evt.name === "return" || evt.name === "y") {
-      evt.preventDefault();
-      confirm();
-    }
-  }
-
   return (
-    <Modal size="md" onClose={props.onClose} onKeyboard={handleKeyboard}>
+    <Modal
+      size="md"
+      onClose={props.onClose}
+      bindings={[
+        { key: "return", cmd: ModalCommands.MODAL_SELECT, desc: "confirm" },
+        { key: "y", cmd: ModalCommands.MODAL_SELECT, desc: "confirm" },
+      ]}
+      commands={{ [ModalCommands.MODAL_SELECT]: () => void confirm() }}
+    >
       <ModalHeader
         title="Add to merge queue"
         hint="enter/y confirm · esc cancel"

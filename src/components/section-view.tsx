@@ -7,6 +7,7 @@ import {
   createEffect,
   createSignal,
   on,
+  onCleanup,
   Match,
   Switch,
 } from "solid-js";
@@ -14,14 +15,21 @@ import { createStore } from "solid-js/store";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import { useGithub } from "../context/github";
+import { usePane } from "@andycmaj/opentui-app";
 import { useFocus } from "../context/focus";
 import { useToast } from "../context/toast";
-import { useKeyHandler } from "../keyboard/useKeyHandler";
+import { canReply, useReply } from "../context/reply";
+import {
+  useHelpContext,
+  type InfoCard,
+  type SelectedItem,
+} from "../context/help-context";
+import { useScope } from "../keyboard/keymap-utils";
 import { Commands } from "../commands";
 import { focusBorder } from "../theme/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { PaneHeader } from "./pane-header";
-import { Footer } from "./footer";
+import { MainFooter } from "./main-footer";
 import { openUrl } from "@/utils/open-url";
 import { SectionKey } from "@/github/types";
 import { PrInfo } from "./pr-info";
@@ -32,19 +40,28 @@ import {
   type ActionsNode,
 } from "./sections/actions-section";
 import { MergeabilitySection } from "./sections/mergeability-section";
+import { MergeQueueSection } from "./sections/merge-queue-section";
 
 const SIDEBAR_WIDTH = 44;
 
+const nodeUrl = (n: ActionsNode): string | undefined =>
+  n.kind === "workflow" ? n.group.url : n.check.url;
+
+const INFO_CARDS: InfoCard[] = ["title", "body", "labels"];
+
 export function SectionView() {
   const { state } = useGithub();
-  const { state: focusState, openModal } = useFocus();
+  const { openModal } = useFocus();
+  const pane = usePane("content");
   const { showToast } = useToast();
+  const { setSelectedItem } = useHelpContext();
+  const { startReply } = useReply();
   const theme = useTheme();
   const dimensions = useTerminalDimensions();
 
   let scrollRef: ScrollBoxRenderable | undefined;
 
-  const isFocused = createMemo(() => focusState.activePane === "content");
+  const isFocused = pane.isFocused;
 
   const [cursor, setCursor] = createSignal(0);
 
@@ -71,6 +88,33 @@ export function SectionView() {
     buildActionsNodes(state.checks, isExpanded),
   );
 
+  // The merge-group run reuses the Actions tree. Its workflow names collide
+  // with the PR's own run, so expand overrides live under a separate prefix.
+  const mqKey = (key: string) => `mq:${key}`;
+  const mergeQueueNodes = createMemo<ActionsNode[]>(() =>
+    buildActionsNodes(state.mergeQueueChecks, (key, defaultOpen) =>
+      isExpanded(mqKey(key), defaultOpen),
+    ),
+  );
+
+  // The tree nodes navigable in the current section, after any leading rows.
+  const treeNodes = (): ActionsNode[] => {
+    switch (state.selectedSection) {
+      case SectionKey.Actions:
+        return actionsNodes();
+      case SectionKey.MergeQueue:
+        return mergeQueueNodes();
+      default:
+        return [];
+    }
+  };
+  const treeOffset = () =>
+    state.selectedSection === SectionKey.MergeQueue
+      ? state.mergeQueueItems.length
+      : 0;
+  const expandKey = (key: string) =>
+    state.selectedSection === SectionKey.MergeQueue ? mqKey(key) : key;
+
   // URL for each navigable item in the active section (undefined → PR url).
   const itemUrls = createMemo<(string | undefined)[]>(() => {
     switch (state.selectedSection) {
@@ -80,9 +124,12 @@ export function SectionView() {
       case SectionKey.Feed:
         return state.feed.map((f) => f.url);
       case SectionKey.Actions:
-        return actionsNodes().map((n) =>
-          n.kind === "workflow" ? n.group.url : n.check.url,
-        );
+        return actionsNodes().map(nodeUrl);
+      case SectionKey.MergeQueue:
+        return [
+          ...state.mergeQueueItems.map((i) => i.url),
+          ...mergeQueueNodes().map(nodeUrl),
+        ];
       case SectionKey.Mergeability:
         return state.mergeBlockers.map(() => undefined);
       default:
@@ -107,6 +154,41 @@ export function SectionView() {
     }),
   );
 
+  // The item under the cursor, published so the footer/help can show only the
+  // bindings that apply to it.
+  const selectedItem = createMemo<SelectedItem | null>(() => {
+    const index = cursor();
+    switch (state.selectedSection) {
+      case SectionKey.Info: {
+        const card = INFO_CARDS[index];
+        return state.pr && card ? { kind: "infoCard", card } : null;
+      }
+      case SectionKey.Feed: {
+        const item = state.feed[index];
+        return item ? { kind: "feedItem", item } : null;
+      }
+      case SectionKey.MergeQueue:
+      case SectionKey.Actions: {
+        const queued = state.mergeQueueItems[index];
+        if (state.selectedSection === SectionKey.MergeQueue && queued)
+          return { kind: "queueEntry", item: queued };
+        const node = treeNodes()[index - treeOffset()];
+        if (!node) return null;
+        return node.kind === "workflow"
+          ? { kind: "workflow", group: node.group, expanded: node.expanded }
+          : { kind: "job", check: node.check };
+      }
+      case SectionKey.Mergeability: {
+        const blocker = state.mergeBlockers[index];
+        return blocker ? { kind: "blocker", blocker } : null;
+      }
+      default:
+        return null;
+    }
+  });
+  createEffect(() => setSelectedItem(selectedItem()));
+  onCleanup(() => setSelectedItem(null));
+
   function childId(index: number): string {
     return `sv-${state.selectedSection}-${index}`;
   }
@@ -127,43 +209,22 @@ export function SectionView() {
     }
   }
 
-  useKeyHandler(
+  useScope(
     "content",
-    (command) => {
-      switch (command) {
-        case Commands.NAV_DOWN:
-          moveCursor(cursor() + 1);
-          break;
-        case Commands.NAV_UP:
-          moveCursor(cursor() - 1);
-          break;
-        case Commands.NAV_TOP:
-          moveCursor(0);
-          break;
-        case Commands.NAV_BOTTOM:
-          moveCursor(itemCount() - 1);
-          break;
-        case Commands.SCROLL_PAGEUP:
-          moveCursor(cursor() - pageStep());
-          break;
-        case Commands.SCROLL_PAGEDOWN:
-          moveCursor(cursor() + pageStep());
-          break;
-        case Commands.OPEN_IN_BROWSER:
-          openSelected();
-          break;
-        case Commands.TOGGLE_EXPAND:
-          activate();
-          break;
-        case Commands.CARD_EDIT:
-          editCurrentCard();
-          break;
-        case Commands.TOGGLE_ANNOTATIONS:
-          setShowAnnotations((v) => !v);
-          break;
-      }
+    {
+      [Commands.NAV_DOWN]: () => moveCursor(cursor() + 1),
+      [Commands.NAV_UP]: () => moveCursor(cursor() - 1),
+      [Commands.NAV_TOP]: () => moveCursor(0),
+      [Commands.NAV_BOTTOM]: () => moveCursor(itemCount() - 1),
+      [Commands.SCROLL_PAGEUP]: () => moveCursor(cursor() - pageStep()),
+      [Commands.SCROLL_PAGEDOWN]: () => moveCursor(cursor() + pageStep()),
+      [Commands.OPEN_IN_BROWSER]: openSelected,
+      [Commands.TOGGLE_EXPAND]: () => activate(),
+      [Commands.CARD_EDIT]: () => editCurrentCard(),
+      [Commands.FEED_REPLY]: () => replyToSelected(),
+      [Commands.TOGGLE_ANNOTATIONS]: () => setShowAnnotations((v) => !v),
     },
-    isFocused,
+    { target: pane.target },
   );
 
   // Enter expands a workflow in the Actions tree, or edits the active card in
@@ -173,11 +234,10 @@ export function SectionView() {
       editCurrentCard();
       return;
     }
-    if (state.selectedSection !== SectionKey.Actions) return;
-    const node = actionsNodes()[cursor()];
+    const node = treeNodes()[cursor() - treeOffset()];
     if (node?.kind === "workflow") {
       // node.expanded already resolves override-or-default, so flip that.
-      setExpanded(node.group.key, !node.expanded);
+      setExpanded(expandKey(node.group.key), !node.expanded);
       scrollRef?.scrollChildIntoView(childId(cursor()));
     }
   }
@@ -198,6 +258,12 @@ export function SectionView() {
     }
   }
 
+  function replyToSelected() {
+    if (state.selectedSection !== SectionKey.Feed) return;
+    const item = state.feed[cursor()];
+    if (item && canReply(item)) startReply(item);
+  }
+
   function pageStep(): number {
     return Math.max(1, Math.floor(viewportHeight() / 4));
   }
@@ -210,6 +276,8 @@ export function SectionView() {
         return "Feed";
       case SectionKey.Actions:
         return "Actions";
+      case SectionKey.MergeQueue:
+        return "Merge queue";
       case SectionKey.Mergeability:
         return "Mergeability";
       default:
@@ -222,6 +290,7 @@ export function SectionView() {
 
   return (
     <box
+      ref={pane.ref}
       flexDirection="column"
       flexGrow={1}
       marginTop={1}
@@ -263,6 +332,15 @@ export function SectionView() {
               showAnnotations={showAnnotations}
             />
           </Match>
+          <Match when={state.selectedSection === SectionKey.MergeQueue}>
+            <MergeQueueSection
+              width={bodyWidth()}
+              selected={activeCursor}
+              idFor={childId}
+              nodes={mergeQueueNodes}
+              showAnnotations={showAnnotations}
+            />
+          </Match>
           <Match when={state.selectedSection === SectionKey.Mergeability}>
             <MergeabilitySection
               width={bodyWidth()}
@@ -273,7 +351,7 @@ export function SectionView() {
         </Switch>
       </scrollbox>
 
-      <Footer />
+      <MainFooter />
     </box>
   );
 }

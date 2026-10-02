@@ -1,10 +1,14 @@
 // Builds a Grafana Explore deep-link into the Loki logs for a PR's preview
 // environment. Each PR is deployed into a `dev-<number>` Kubernetes namespace,
 // so the link pre-fills a LogQL selector for that namespace over the last hour.
+//
+// The Grafana Explore base URL (e.g. `https://grafana.example.com/explore`)
+// comes from `GHDASH_LOKI_URL`; returns null when it isn't configured.
 
-const LOKI_EXPLORE_BASE = "https://logs.dev.valstro.engineering/explore";
+export function lokiLogsUrl(prNumber: number): string | null {
+  const base = process.env.GHDASH_LOKI_URL;
+  if (!base) return null;
 
-export function lokiLogsUrl(prNumber: number): string {
   // Mirrors the pane shape Grafana Explore encodes into the URL; `mia` is the
   // (arbitrary) pane id Grafana assigns to a single Explore pane.
   const panes = {
@@ -30,5 +34,5 @@ export function lokiLogsUrl(prNumber: number): string {
     orgId: "1",
   });
 
-  return `${LOKI_EXPLORE_BASE}?${params.toString()}`;
+  return `${base}?${params.toString()}`;
 }

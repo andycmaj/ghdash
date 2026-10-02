@@ -25,7 +25,7 @@ const now = Date.now();
 const ago = (mins: number) => new Date(now - mins * 60_000).toISOString();
 
 const baseRepo: RepoContext = {
-  owner: "valstro-internal",
+  owner: "andycmaj",
   repo: "ghdash-tui",
   branch: "feat/hot-reload",
 };
@@ -47,7 +47,7 @@ const basePr: PRDashboard["pr"] = {
     { name: "enhancement", color: "a2eeef" },
     { name: "dx", color: "5c9cf5" },
   ],
-  url: "https://github.com/valstro-internal/ghdash-tui/pull/42",
+  url: "https://github.com/andycmaj/ghdash-tui/pull/42",
   status: "open",
   isDraft: false,
   headRef: "feat/hot-reload",
@@ -87,6 +87,7 @@ const baseFeed: PRDashboard["feed"] = [
     body: "Can we cover the merge-queue state too?",
     createdAt: ago(35),
     url: "https://github.com/x/3",
+    threadId: "th1",
     threadPath: "src/github/fixtures.ts",
     threadLine: 12,
     threadResolved: false,
@@ -133,6 +134,8 @@ function dashboard(over: Partial<PRDashboard> = {}): PRDashboard {
     reviewThreads: baseThreads,
     checks: passingChecks,
     mergeBlockers: [],
+    mergeQueueItems: [],
+    mergeQueueChecks: [],
     ...over,
   };
 }
@@ -153,9 +156,7 @@ export const FIXTURES: Record<string, Fixture> = {
         status: "draft",
         isDraft: true,
         reviewDecision: "REVIEW_REQUIRED",
-        reviewRequests: [
-          { name: "valstro/valstro-market-data-guild", isTeam: true },
-        ],
+        reviewRequests: [{ name: "octo-org/platform-reviewers", isTeam: true }],
         mergeStateStatus: "DRAFT",
       },
       checks: [
@@ -182,7 +183,7 @@ export const FIXTURES: Record<string, Fixture> = {
         {
           kind: MergeBlockerKind.RequiredReview,
           description:
-            "Required review not yet approved — waiting on valstro/valstro-market-data-guild",
+            "Required review not yet approved — waiting on octo-org/platform-reviewers",
           satisfied: false,
         },
       ],
@@ -258,8 +259,92 @@ export const FIXTURES: Record<string, Fixture> = {
       pr: {
         ...basePr,
         mergeStateStatus: "QUEUED",
-        mergeQueue: { state: "AWAITING_CHECKS", position: 2 },
+        mergeQueue: {
+          state: "AWAITING_CHECKS",
+          position: 3,
+          enqueuedAt: ago(9),
+          estimatedTimeToMerge: 720,
+        },
       },
+      mergeQueueItems: [
+        {
+          id: "mq1",
+          position: 1,
+          state: "AWAITING_CHECKS",
+          number: 38,
+          title: "Bump octokit to v4.1",
+          url: "https://github.com/andycmaj/ghdash-tui/pull/38",
+          author: { login: "dependabot", isBot: true },
+          enqueuedAt: ago(14),
+          checkStatus: CheckStatus.Running,
+          isCurrent: false,
+        },
+        {
+          id: "mq2",
+          position: 2,
+          state: "AWAITING_CHECKS",
+          number: 40,
+          title: "Fix flaky poll-loop backoff test",
+          url: "https://github.com/andycmaj/ghdash-tui/pull/40",
+          author: reviewer,
+          enqueuedAt: ago(11),
+          checkStatus: CheckStatus.Failure,
+          isCurrent: false,
+        },
+        {
+          id: "mq3",
+          position: 3,
+          state: "AWAITING_CHECKS",
+          number: 42,
+          title: basePr.title,
+          url: basePr.url,
+          author: human,
+          enqueuedAt: ago(9),
+          checkStatus: CheckStatus.Running,
+          isCurrent: true,
+        },
+        {
+          id: "mq4",
+          position: 4,
+          state: "QUEUED",
+          number: 44,
+          title: "Document fixture mode in the README",
+          url: "https://github.com/andycmaj/ghdash-tui/pull/44",
+          author: reviewer,
+          enqueuedAt: ago(3),
+          checkStatus: null,
+          isCurrent: false,
+        },
+      ],
+      mergeQueueChecks: [
+        {
+          id: "mqck1",
+          name: "build",
+          workflowName: "CI",
+          status: CheckStatus.Success,
+          conclusion: "SUCCESS",
+          url: "https://github.com/x/actions/runs/900/job/1",
+          annotations: [],
+          startedAt: ago(8),
+          completedAt: ago(6),
+        },
+        {
+          id: "mqck2",
+          name: "test",
+          workflowName: "CI",
+          status: CheckStatus.Running,
+          url: "https://github.com/x/actions/runs/900/job/2",
+          annotations: [],
+          startedAt: ago(8),
+        },
+        {
+          id: "mqck3",
+          name: "e2e",
+          workflowName: "CI",
+          status: CheckStatus.Pending,
+          annotations: [],
+        },
+      ],
     }),
   },
 

@@ -12,7 +12,7 @@
 - Comments: Minimal comments, NO JSDoc. Only use comments to explain WHY something was done, not to describe what it's doing.
 - Naming: camelCase for variables/functions, PascalCase for classes/interfaces, UPPER_CASE for constants
 - Types: Strict TypeScript, use interfaces for options/configs, explicit return types for public APIs
-- Formatting: Prettier
+- Formatting: oxfmt (`bun run format`); linting: oxlint (`bun run lint`)
 - Imports: Use explicit imports, group by: built-ins, external deps, internal modules
 
 ## Bun Guidelines
@@ -29,16 +29,24 @@ This project uses bun as its runtime, not nodejs or browser.
 
 ## Architecture
 
-`@opentui/solid` TUI. Boot (`src/index.tsx`) → nested Solid Context providers
+`@opentui/solid` TUI built on [`@andycmaj/opentui-app`](https://github.com/andycmaj/opentui-app)
+(boot, keymap, focus, theme, toast, modal primitives). Framework changes go
+there; this repo pins it via npm.
+
+Boot (`src/index.tsx`) → nested Solid Context providers
 as DI (`src/app.tsx`) → one `createStore` domain store in `src/context/github.tsx`
 mutated via `produce`, fed by an Effection polling loop → declarative
-keymap/command/focus layer (`src/keymap.ts`, `src/commands.ts`, `src/keyboard/`,
-`src/context/focus.tsx`) → `<Show>`-gated modal overlays.
+keymap/command/focus layer (`src/keymap.ts` scope table, `src/commands.ts`,
+`src/keyboard/`, `src/context/focus.tsx`) on `@opentui/keymap` → `<Show>`-gated
+modal overlays. Panes are real OpenTUI focus targets (`usePane`), each owning a
+focus-within `useScope` layer; modals take focus into their own high-priority
+layer, so keys only ever reach one handler.
 
 - Data layer: `src/github/` (Octokit GraphQL + REST). `client.ts` fetches the
   whole dashboard for the current worktree's open PR; `status-utils.ts` maps
   statuses and computes merge blockers; `repo-context.ts` derives owner/repo/branch.
-- Views: left pane `components/section-tree.tsx` (Feed / Actions / Merge blockers),
+- Views: left pane `components/section-tree.tsx` (Feed / Actions / Merge queue
+  (only while queued) / Mergeability),
   right pane `components/section-view.tsx` (the selected section's content).
 
 ## Testing the TUI

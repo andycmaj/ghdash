@@ -13,6 +13,23 @@ styling, and interaction model are adapted from `tilt-tui`.
 - A GitHub token: `GITHUB_TOKEN`/`GH_TOKEN`, or an authenticated `gh` CLI
   (the app falls back to `gh auth token`). Scopes: `repo`, `read:org`, `workflow`.
 
+## Installing
+
+Releases are GitHub release assets, installed with [mise](https://mise.jdx.dev):
+
+```
+mise use -g github:<owner>/<repo>          # latest release
+mise use -g github:<owner>/<repo>@pr-123   # beta build for PR #123
+```
+
+- **Beta:** every PR touching ghdash-tui (or the shared packages) gets a
+  `pr-<number>` prerelease, rebuilt on each push and deleted when the PR closes
+  (`.github/workflows/ghdash-beta.yml`).
+- **Release:** run the "ghdash-tui Release" workflow from `main` (Actions →
+  Run workflow), picking patch/minor/major or an explicit version. It bumps
+  `package.json`, tags `vX.Y.Z`, moves `latest`, builds, and publishes
+  (`.github/workflows/ghdash-release.yml`, `script/version.ts`).
+
 ## Running
 
 ```
@@ -32,9 +49,9 @@ Mergeability view; a PR in the repository merge queue shows its queue state and
 position. Pass a PR explicitly as the first argument:
 
 ```
-ghdash-tui 14354                                  # PR #14354 in the current repo
-ghdash-tui valstro/omskit#14354                   # fully qualified — no git repo needed
-ghdash-tui https://github.com/valstro/omskit/pull/14354
+ghdash-tui 14354                                       # PR #14354 in the current repo
+ghdash-tui octocat/hello-world#14354                   # fully qualified — no git repo needed
+ghdash-tui https://github.com/octocat/hello-world/pull/14354
 ```
 
 A bare number still uses the current worktree's `origin` to resolve owner/repo;
@@ -77,6 +94,10 @@ Loads user settings from `~/.config/ghdash-tui/config.json`:
 
 Themes: `default`, `terminal`, `mono`, `tokyo-night`.
 
+`l` opens the PR's preview-environment logs (namespace `dev-<number>`) in
+Grafana Explore. Set `GHDASH_LOKI_URL` to your Grafana Explore URL (e.g.
+`https://grafana.example.com/explore`) to enable it.
+
 ## Merging
 
 When the PR is open and all requirements in the **Mergeability** view are met, a
@@ -90,4 +111,3 @@ must have a merge queue configured on the base branch.
 - Read-only (no inline replies / approve / merge yet).
 - Same-repo PRs only — cross-fork PRs (where the head branch lives in a fork)
   are not yet resolved.
-# ghdash-tui

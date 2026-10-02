@@ -12,6 +12,7 @@ import {
   type FeedItem,
   type Label,
   type Mergeable,
+  type MergeQueueItem,
   type PRDashboard,
   type PrListItem,
   type PullRequest,
@@ -48,6 +49,71 @@ export async function resolveToken(override?: string): Promise<string> {
   );
 }
 
+// Check runs + legacy statuses on a commit's rollup. Shared by the PR head
+// commit and the merge-group commit of its merge-queue entry.
+const CHECK_CONTEXTS = `
+  contexts(first: 100) {
+    nodes {
+      __typename
+      ... on CheckRun {
+        name
+        status
+        conclusion
+        detailsUrl
+        startedAt
+        completedAt
+        checkSuite { workflowRun { workflow { name } } }
+        annotations(first: 20) {
+          nodes {
+            annotationLevel
+            message
+            title
+            path
+            location { start { line } }
+          }
+        }
+      }
+      ... on StatusContext {
+        context
+        state
+        targetUrl
+        createdAt
+      }
+    }
+  }
+`;
+
+// The queue is selected through the PR's own entry, so it resolves to null for
+// PRs that aren't queued. Other entries only need a one-line rollup state.
+const MERGE_QUEUE_ENTRY = `
+  mergeQueueEntry {
+    state
+    position
+    enqueuedAt
+    estimatedTimeToMerge
+    headCommit {
+      statusCheckRollup { ${CHECK_CONTEXTS} }
+    }
+    mergeQueue {
+      entries(first: 50) {
+        nodes {
+          id
+          state
+          position
+          enqueuedAt
+          headCommit { statusCheckRollup { state } }
+          pullRequest {
+            number
+            title
+            url
+            author { login __typename }
+          }
+        }
+      }
+    }
+  }
+`;
+
 // Shared field selection for a PR, used by both the by-branch and by-number
 // queries below.
 const PR_FIELDS = `
@@ -76,7 +142,7 @@ const PR_FIELDS = `
       }
     }
   }
-  mergeQueueEntry { state position }
+  ${MERGE_QUEUE_ENTRY}
   headRefName
   baseRefName
   author { login __typename }
@@ -101,35 +167,7 @@ const PR_FIELDS = `
     nodes {
       commit {
         statusCheckRollup {
-          contexts(first: 100) {
-            nodes {
-              __typename
-              ... on CheckRun {
-                name
-                status
-                conclusion
-                detailsUrl
-                startedAt
-                completedAt
-                checkSuite { workflowRun { workflow { name } } }
-                annotations(first: 20) {
-                  nodes {
-                    annotationLevel
-                    message
-                    title
-                    path
-                    location { start { line } }
-                  }
-                }
-              }
-              ... on StatusContext {
-                context
-                state
-                targetUrl
-                createdAt
-              }
-            }
-          }
+          ${CHECK_CONTEXTS}
         }
       }
     }
@@ -183,6 +221,13 @@ const UPDATE_PR_MUTATION = `
 mutation UpdatePr($id: ID!, $title: String, $body: String) {
   updatePullRequest(input: { pullRequestId: $id, title: $title, body: $body }) {
     pullRequest { id title body }
+  }
+}`;
+
+const REPLY_TO_THREAD_MUTATION = `
+mutation ReplyToThread($threadId: ID!, $body: String!) {
+  addPullRequestReviewThreadReply(input: { pullRequestReviewThreadId: $threadId, body: $body }) {
+    comment { id }
   }
 }`;
 
@@ -309,6 +354,11 @@ export class GithubClient {
     });
   }
 
+  async replyToThread(threadId: string, body: string): Promise<void> {
+    const octokit = await this.getOctokit();
+    await octokit.graphql(REPLY_TO_THREAD_MUTATION, { threadId, body });
+  }
+
   // The repo's labels, offered when editing a PR's labels. REST keeps this a
   // single paginated call and returns names + colors directly.
   async getRepoLabels(owner: string, repo: string): Promise<Label[]> {
@@ -367,6 +417,9 @@ export class GithubClient {
         ? {
             state: node.mergeQueueEntry.state,
             position: node.mergeQueueEntry.position ?? null,
+            enqueuedAt: node.mergeQueueEntry.enqueuedAt ?? undefined,
+            estimatedTimeToMerge:
+              node.mergeQueueEntry.estimatedTimeToMerge ?? undefined,
           }
         : null,
       createdAt: node.createdAt,
@@ -375,19 +428,31 @@ export class GithubClient {
 
     const reviewThreads = mapReviewThreads(node);
     const feed = buildFeed(node, reviewThreads);
-    const checks = mapChecks(node);
+    const checks = mapChecks(
+      node.commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes,
+    );
     const mergeBlockers = computeMergeBlockers(pr, checks, reviewThreads);
+    const entry = node.mergeQueueEntry;
+    const mergeQueueItems = mapMergeQueueItems(entry, node.number);
+    const mergeQueueChecks = mapChecks(
+      entry?.headCommit?.statusCheckRollup?.contexts?.nodes,
+    );
 
-    return { pr, feed, reviewThreads, checks, mergeBlockers };
+    return {
+      pr,
+      feed,
+      reviewThreads,
+      checks,
+      mergeBlockers,
+      mergeQueueItems,
+      mergeQueueChecks,
+    };
   }
 }
 
 // Annotations are fetched inline via the GraphQL query (CheckRun.annotations),
 // so there are no per-check REST calls.
-function mapChecks(node: PRNode): CheckRun[] {
-  const contexts =
-    node.commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes ?? [];
-
+function mapChecks(contexts: GqlCheckContext[] = []): CheckRun[] {
   const checks: CheckRun[] = [];
   for (const c of contexts) {
     if (c.__typename === "CheckRun") {
@@ -415,6 +480,32 @@ function mapChecks(node: PRNode): CheckRun[] {
   }
 
   return checks;
+}
+
+function mapMergeQueueItems(
+  entry: GqlMergeQueueEntry | null | undefined,
+  currentNumber: number,
+): MergeQueueItem[] {
+  const nodes = entry?.mergeQueue?.entries?.nodes ?? [];
+  const items: MergeQueueItem[] = [];
+  for (const n of nodes) {
+    if (!n?.pullRequest) continue;
+    const rollup = n.headCommit?.statusCheckRollup?.state;
+    items.push({
+      id: n.id,
+      position: n.position ?? null,
+      state: n.state,
+      number: n.pullRequest.number,
+      title: n.pullRequest.title,
+      url: n.pullRequest.url,
+      author: toAuthor(n.pullRequest.author),
+      enqueuedAt: n.enqueuedAt ?? undefined,
+      checkStatus: rollup ? normalizeStatusContextState(rollup) : null,
+      isCurrent: n.pullRequest.number === currentNumber,
+    });
+  }
+  items.sort((a, b) => (a.position ?? Infinity) - (b.position ?? Infinity));
+  return items;
 }
 
 function mapAnnotations(nodes: GqlAnnotation[] | undefined): Annotation[] {
@@ -458,20 +549,19 @@ function mapReviewRequests(node: PRNode): ReviewRequest[] {
 function mapReviewThreads(node: PRNode): ReviewThread[] {
   const threads = node.reviewThreads?.nodes ?? [];
   return threads.map((t): ReviewThread => {
-    const comments = (t.comments?.nodes ?? []).map(
-      (c, i): FeedItem => ({
-        id: c.id,
-        kind: FeedItemKind.ThreadComment,
-        author: toAuthor(c.author),
-        body: c.body ?? "",
-        createdAt: c.createdAt,
-        url: c.url,
-        threadPath: t.path ?? undefined,
-        threadLine: t.line ?? null,
-        threadResolved: t.isResolved,
-        isReply: i > 0,
-      }),
-    );
+    const comments = (t.comments?.nodes ?? []).map((c, i): FeedItem => ({
+      id: c.id,
+      kind: FeedItemKind.ThreadComment,
+      author: toAuthor(c.author),
+      body: c.body ?? "",
+      createdAt: c.createdAt,
+      url: c.url,
+      threadId: t.id,
+      threadPath: t.path ?? undefined,
+      threadLine: t.line ?? null,
+      threadResolved: t.isResolved,
+      isReply: i > 0,
+    }));
     return {
       id: t.id,
       path: t.path ?? "",
@@ -499,8 +589,11 @@ function buildFeed(node: PRNode, reviewThreads: ReviewThread[]): FeedItem[] {
   }
 
   for (const r of node.reviews?.nodes ?? []) {
-    // Skip empty PENDING reviews with no body — they carry no signal.
-    if ((r.state ?? "") === "PENDING" && !(r.body ?? "").trim()) continue;
+    // A bodiless PENDING/COMMENTED review is just the wrapper GitHub creates
+    // around inline thread comments, which already appear in the feed.
+    const state = r.state ?? "";
+    const isWrapper = state === "PENDING" || state === "COMMENTED";
+    if (isWrapper && !(r.body ?? "").trim()) continue;
     items.push({
       id: r.id,
       kind: FeedItemKind.Review,
@@ -568,6 +661,37 @@ interface GqlCheckContext {
   createdAt?: string;
 }
 
+interface GqlCheckRollup {
+  state?: string;
+  contexts?: { nodes?: GqlCheckContext[] };
+}
+
+interface GqlMergeQueueEntry {
+  id?: string;
+  state: string;
+  position?: number | null;
+  enqueuedAt?: string | null;
+  estimatedTimeToMerge?: number | null;
+  headCommit?: { statusCheckRollup?: GqlCheckRollup | null } | null;
+  mergeQueue?: {
+    entries?: { nodes?: (GqlQueuedEntry | null)[] };
+  } | null;
+}
+
+interface GqlQueuedEntry {
+  id: string;
+  state: string;
+  position?: number | null;
+  enqueuedAt?: string | null;
+  headCommit?: { statusCheckRollup?: GqlCheckRollup | null } | null;
+  pullRequest?: {
+    number: number;
+    title: string;
+    url: string;
+    author?: GqlActor | null;
+  } | null;
+}
+
 interface GqlLabel {
   name: string;
   color?: string;
@@ -599,7 +723,7 @@ interface PRNode {
   mergeStateStatus?: string;
   reviewDecision?: string | null;
   reviewRequests?: { nodes?: GqlReviewRequest[] };
-  mergeQueueEntry?: { state: string; position?: number | null } | null;
+  mergeQueueEntry?: GqlMergeQueueEntry | null;
   headRefName: string;
   baseRefName: string;
   author?: GqlActor | null;
@@ -609,9 +733,7 @@ interface PRNode {
   commits?: {
     nodes?: {
       commit?: {
-        statusCheckRollup?: {
-          contexts?: { nodes?: GqlCheckContext[] };
-        } | null;
+        statusCheckRollup?: GqlCheckRollup | null;
       };
     }[];
   };

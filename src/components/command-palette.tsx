@@ -9,16 +9,12 @@ import { useListNavigation } from "@/hooks/useListNavigation";
 import { Modal } from "./modal/modal";
 import { ModalHeader } from "./modal/modal-header";
 import { ModalFilterInput } from "./modal/modal-filter-input";
-import { useFocus } from "../context/focus";
 import { useGithub } from "../context/github";
 import { canMerge } from "@/github/status-utils";
-import {
-  getHelpMappingsForMode,
-  formatKeyDisplay,
-  type Command,
-} from "../keyboard/keymap-utils";
+import { useReachableBindings, type Command } from "../keyboard/keymap-utils";
 import { Commands } from "../commands";
 import { truncate } from "../utils/truncate";
+import { ModalCommands, modalNavBindings } from "@andycmaj/opentui-app";
 
 export interface PaletteOption {
   title: string;
@@ -35,7 +31,7 @@ interface CommandPaletteProps {
 
 export function CommandPalette(props: CommandPaletteProps) {
   const theme = useTheme();
-  const { state: focusState } = useFocus();
+  const reachable = useReachableBindings();
   const { state } = useGithub();
 
   let scrollRef: ScrollBoxRenderable | undefined;
@@ -56,24 +52,18 @@ export function CommandPalette(props: CommandPaletteProps) {
       });
     }
 
-    const appBindings = getHelpMappingsForMode("app");
-    const modeBindings = getHelpMappingsForMode(focusState.activePane);
-
-    for (const [category, bindings] of [
-      ["Commands", appBindings],
-      ["This View", modeBindings],
-    ] as const) {
-      for (const mapping of bindings) {
-        if (seen.has(mapping.command)) continue;
-        seen.add(mapping.command);
-        result.push({
-          title: mapping.showInHelpAs ?? mapping.description,
-          value: `command:${mapping.command}`,
-          description: formatKeyDisplay(mapping),
-          category,
-          command: mapping.command,
-        });
-      }
+    // Bindings reachable from the pane the palette was opened from: its own
+    // first, then the app layer's.
+    for (const binding of reachable()) {
+      if (!binding.help || seen.has(binding.cmd)) continue;
+      seen.add(binding.cmd);
+      result.push({
+        title: binding.help,
+        value: `command:${binding.cmd}`,
+        description: binding.keys,
+        category: binding.scope === "app" ? "Commands" : "This View",
+        command: binding.cmd,
+      });
     }
 
     return result;
@@ -135,34 +125,19 @@ export function CommandPalette(props: CommandPaletteProps) {
     props.onSelect(opt);
   }
 
-  function handleKeyboard(evt: {
-    name: string;
-    ctrl?: boolean;
-    preventDefault: () => void;
-  }) {
-    if (evt.name === "up" || (evt.ctrl && evt.name === "k")) {
-      evt.preventDefault();
-      nav.move(-1);
-      return;
-    }
-
-    if (evt.name === "down" || (evt.ctrl && evt.name === "j")) {
-      evt.preventDefault();
-      nav.move(1);
-      return;
-    }
-
-    if (evt.name === "return") {
-      evt.preventDefault();
-      handleSelect();
-      return;
-    }
-  }
-
   const maxHeight = 20;
 
   return (
-    <Modal size="md" onClose={props.onClose} onKeyboard={handleKeyboard}>
+    <Modal
+      size="md"
+      onClose={props.onClose}
+      bindings={modalNavBindings}
+      commands={{
+        [ModalCommands.MODAL_UP]: () => nav.move(-1),
+        [ModalCommands.MODAL_DOWN]: () => nav.move(1),
+        [ModalCommands.MODAL_SELECT]: handleSelect,
+      }}
+    >
       <ModalHeader title="Commands" />
 
       <ModalFilterInput

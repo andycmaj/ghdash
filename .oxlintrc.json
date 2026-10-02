@@ -1,0 +1,39 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import"],
+  "options": {
+    "typeAware": true
+  },
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "rules": {
+    "typescript/no-base-to-string": "warn",
+    "typescript/no-floating-promises": "warn",
+    "typescript/no-misused-spread": "warn",
+    "typescript/no-explicit-any": "error",
+
+    // SolidJS uses `let ref: T | undefined` for JSX ref bindings assigned at runtime
+    "no-unassigned-vars": "off",
+    // SolidJS tracks reactive deps by reading properties inside createEffect
+    "no-unused-expressions": "off",
+    // Intentional control char matching (ANSI escapes, terminal input)
+    "no-control-regex": "off",
+    // Effection operations are `function*` that don't always yield
+    "require-yield": "off",
+
+    // GraphQL `__typename` and Node `__dirname`/`__filename`
+    "no-underscore-dangle": "off",
+    "no-shadow": "off",
+    "unicorn/consistent-function-scoping": "off",
+    "unicorn/no-array-sort": "off",
+    "unicorn/no-array-reverse": "off",
+    // Terminal UI, not a DOM event handler codebase
+    "unicorn/prefer-add-event-listener": "off",
+    "unicorn/require-module-specifiers": "off",
+    "unicorn/require-post-message-target-origin": "off",
+    "no-new": "off"
+  },
+  "ignorePatterns": ["**/node_modules", "**/dist", "**/*.d.ts"]
+}

@@ -62,6 +62,7 @@ export interface FeedItem {
   // review submissions only
   reviewState?: ReviewState;
   // review-thread comments only
+  threadId?: string;
   threadPath?: string;
   threadLine?: number | null;
   threadResolved?: boolean;
@@ -121,6 +122,24 @@ export interface MergeQueueEntry {
   // QUEUED | AWAITING_CHECKS | LOCKED | MERGEABLE | UNMERGEABLE
   state: string;
   position: number | null;
+  enqueuedAt?: string;
+  // GitHub's estimate, in seconds.
+  estimatedTimeToMerge?: number;
+}
+
+// One row of the base branch's merge queue, as shown in the Merge queue section.
+export interface MergeQueueItem {
+  id: string;
+  position: number | null;
+  state: string;
+  number: number;
+  title: string;
+  url: string;
+  author: Author;
+  enqueuedAt?: string;
+  // Rollup of the checks on the entry's merge-group commit; null before CI starts.
+  checkStatus: CheckStatus | null;
+  isCurrent: boolean;
 }
 export type ReviewDecision =
   | "APPROVED"
@@ -133,7 +152,7 @@ export type ReviewDecision =
 // missing rather than just "review required".
 export interface ReviewRequest {
   // "org/team-slug" for a team (matches GitHub's own display, e.g.
-  // "valstro/valstro-market-data-guild"), "@login" for an individual.
+  // "octo-org/platform-reviewers"), "@login" for an individual.
   name: string;
   isTeam: boolean;
 }
@@ -179,12 +198,17 @@ export interface PRDashboard {
   reviewThreads: ReviewThread[];
   checks: CheckRun[];
   mergeBlockers: MergeBlocker[];
+  // Empty unless the PR is in the merge queue.
+  mergeQueueItems: MergeQueueItem[];
+  // Checks for this PR's merge-group run (not its head commit).
+  mergeQueueChecks: CheckRun[];
 }
 
 export const SectionKey = {
   Info: "info",
   Feed: "feed",
   Actions: "actions",
+  MergeQueue: "merge-queue",
   Mergeability: "mergeability",
 } as const;
 export type SectionKey = (typeof SectionKey)[keyof typeof SectionKey];

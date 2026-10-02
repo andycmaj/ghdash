@@ -9,6 +9,7 @@ import { useGithub } from "../context/github";
 import { useToast } from "../context/toast";
 import { Modal } from "./modal/modal";
 import { ModalHeader } from "./modal/modal-header";
+import { ModalCommands } from "@andycmaj/opentui-app";
 
 interface PrEditModalProps {
   field: "title" | "body";
@@ -60,29 +61,19 @@ export function PrEditModal(props: PrEditModalProps) {
     }
   }
 
-  function handleKeyboard(evt: {
-    name: string;
-    ctrl?: boolean;
-    preventDefault: () => void;
-  }) {
-    // Title: enter saves. Description: enter is a newline, ctrl+s saves.
-    if (isTitle && evt.name === "return") {
-      evt.preventDefault();
-      save();
-      return;
-    }
-    if (!isTitle && evt.ctrl && evt.name === "s") {
-      evt.preventDefault();
-      save();
-      return;
-    }
-  }
-
   return (
     <Modal
       size={isTitle ? "md" : "lg"}
       onClose={props.onClose}
-      onKeyboard={handleKeyboard}
+      bindings={[
+        // Title: enter saves. Description: enter is a newline, ctrl+s saves.
+        {
+          key: isTitle ? "return" : "ctrl+s",
+          cmd: ModalCommands.MODAL_SELECT,
+          desc: "save",
+        },
+      ]}
+      commands={{ [ModalCommands.MODAL_SELECT]: () => void save() }}
     >
       <ModalHeader
         title={isTitle ? "Edit title" : "Edit description"}

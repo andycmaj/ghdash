@@ -1,14 +1,16 @@
-// Footer component - context-aware help
+// MainFooter component - context-aware help
 // Dynamically generates help text from keymap
 
 import { createMemo, For } from "solid-js";
 import { useTerminalDimensions } from "@opentui/solid";
 import { useFocus } from "../context/focus";
+import { useHelpContext } from "../context/help-context";
 import { useTheme } from "@/hooks/useTheme";
-import { getHelpItemsForMode } from "../keyboard/keymap-utils";
+import { useHelpItems } from "../keyboard/keymap-utils";
 
-export function Footer() {
-  const { state, sidebarVisible } = useFocus();
+export function MainFooter() {
+  const { sidebarVisible } = useFocus();
+  const { context } = useHelpContext();
   const theme = useTheme();
   const dimensions = useTerminalDimensions();
 
@@ -21,8 +23,9 @@ export function Footer() {
     return terminalWidth;
   });
 
-  // Get help items dynamically from keymap
-  const allHelpItems = createMemo(() => getHelpItemsForMode(state.activePane));
+  // Help items from the bindings reachable in the active pane, limited to
+  // those relevant to the active section and selected item
+  const allHelpItems = useHelpItems(context);
 
   // When the content pane is narrow (< 80 chars), show only the help shortcut
   const helpItems = createMemo(() => {

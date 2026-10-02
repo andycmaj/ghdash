@@ -1,0 +1,94 @@
+name: ghdash-tui Beta Release
+run-name: "beta PR #${{ github.event.pull_request.number }}"
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    # Only PRs that can change the ghdash-tui binary get a beta build.
+    paths:
+      - src/**
+      - script/**
+      - package.json
+      - bun.lock
+      - bunfig.toml
+      - tsconfig.json
+      - .github/workflows/ghdash-beta.yml
+
+concurrency:
+  group: beta-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  # Tear down the beta release when the PR is closed (merged or not).
+  cleanup:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Delete beta release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release delete "pr-${{ github.event.pull_request.number }}" --cleanup-tag --yes || true
+
+  # Create/update the beta prerelease for this PR branch.
+  beta:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    env:
+      PR: ${{ github.event.pull_request.number }}
+      TAG: pr-${{ github.event.pull_request.number }}
+      SHA: ${{ github.event.pull_request.head.sha }}
+      TITLE: ${{ github.event.pull_request.title }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install
+
+      - name: Compute beta version
+        id: ver
+        run: |
+          base=$(bun --print "require('./package.json').version")
+          echo "version=${base}-beta.${PR}" >> "$GITHUB_OUTPUT"
+
+      - name: Build cross-platform binaries
+        run: bun run build:binary
+        env:
+          GHDASH_TUI_BUILD_VERSION: ${{ steps.ver.outputs.version }}
+
+      - name: Stage release assets
+        run: |
+          shopt -s nullglob
+          for f in dist/ghdash-tui-*/bin/ghdash-tui; do
+            platform=$(basename "$(dirname "$(dirname "$f")")")
+            cp "$f" "$platform"
+          done
+
+      - name: Recreate beta prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh release delete "$TAG" --cleanup-tag --yes || true
+          gh release create "$TAG" \
+            --prerelease \
+            --target "$SHA" \
+            --title "PR #${PR}: ${TITLE}" \
+            --generate-notes \
+            ghdash-tui-*
+          generated=$(gh release view "$TAG" --json body -q .body)
+          {
+            bun run script/install-notes.ts "$REPO" "$TAG"
+            echo
+            echo "$generated"
+          } > "$RUNNER_TEMP/beta-notes.md"
+          gh release edit "$TAG" --notes-file "$RUNNER_TEMP/beta-notes.md"

@@ -1,5 +1,5 @@
 {
-  "name": "@valstro-internal/ghdash-tui",
+  "name": "@andycmaj/ghdash-tui",
   "version": "0.1.0",
   "description": "GitHub PR status dashboard TUI built with OpenTUI Solid",
   "type": "module",
@@ -15,22 +15,30 @@
     "build": "bun build ./src/index.tsx --outdir=./dist --target=bun",
     "build:binary": "bun run script/build.ts",
     "build:binary:single": "bun run script/build.ts --single",
+    "version:bump": "bun run script/version.ts",
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test",
+    "lint": "oxlint",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "lint:fix": "oxlint --fix"
   },
   "dependencies": {
-    "@opentui/core": "0.1.97",
-    "@opentui/solid": "0.1.97",
+    "@andycmaj/opentui-app": "^0.1.0",
+    "@opentui/core": "0.5.12",
+    "@opentui/solid": "0.5.12",
     "citty": "^0.2.2",
     "effection": "4.0.2",
     "marked": "^17.0.1",
     "octokit": "^4.0.2",
-    "solid-js": "1.9.9"
+    "solid-js": "1.9.12"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/node": "25.2.0",
-    "prettier": "3.8.1",
+    "oxfmt": "0.70.0",
+    "oxlint": "1.85.0",
+    "oxlint-tsgolint": "7.0.2003",
     "typescript": "5.9.3"
   }
 }

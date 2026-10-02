@@ -103,7 +103,7 @@ for (const item of targets) {
   await Bun.file(`dist/${name}/package.json`).write(
     JSON.stringify(
       {
-        name: `@valstro-internal/${name}`,
+        name: `@andycmaj/${name}`,
         version,
         os: [item.os],
         cpu: [item.arch],

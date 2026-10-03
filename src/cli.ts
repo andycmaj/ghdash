@@ -13,7 +13,7 @@ let config: CLIConfig | undefined = undefined;
 
 const main = defineCommand({
   meta: {
-    name: "ghdash-tui",
+    name: "ghdash",
     version: APP_VERSION,
     description: "A terminal UI dashboard for a GitHub PR",
   },

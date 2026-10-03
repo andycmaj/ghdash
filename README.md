@@ -1,4 +1,4 @@
-# ghdash-tui
+# ghdash
 
 A terminal UI that shows an interactive status dashboard for **the current git
 worktree's open PR** on GitHub — the PR feed (comments + reviews + review
@@ -22,10 +22,10 @@ mise use -g github:<owner>/<repo>          # latest release
 mise use -g github:<owner>/<repo>@pr-123   # beta build for PR #123
 ```
 
-- **Beta:** every PR touching ghdash-tui (or the shared packages) gets a
+- **Beta:** every PR touching ghdash (or the shared packages) gets a
   `pr-<number>` prerelease, rebuilt on each push and deleted when the PR closes
   (`.github/workflows/ghdash-beta.yml`).
-- **Release:** run the "ghdash-tui Release" workflow from `main` (Actions →
+- **Release:** run the "ghdash Release" workflow from `main` (Actions →
   Run workflow), picking patch/minor/major or an explicit version. It bumps
   `package.json`, tags `vX.Y.Z`, moves `latest`, builds, and publishes
   (`.github/workflows/ghdash-release.yml`, `script/version.ts`).
@@ -35,7 +35,7 @@ mise use -g github:<owner>/<repo>@pr-123   # beta build for PR #123
 ```
 bun install
 cd /path/to/a/repo/with/an/open/pr/on/the/current/branch
-bun run --conditions=browser --preload @opentui/solid/preload /path/to/ghdash-tui/src/index.tsx
+bun run --conditions=browser --preload @opentui/solid/preload /path/to/ghdash/src/index.tsx
 ```
 
 Or, from inside this project during development, `bun dev` (resolves the PR from
@@ -49,9 +49,9 @@ Mergeability view; a PR in the repository merge queue shows its queue state and
 position. Pass a PR explicitly as the first argument:
 
 ```
-ghdash-tui 14354                                       # PR #14354 in the current repo
-ghdash-tui octocat/hello-world#14354                   # fully qualified — no git repo needed
-ghdash-tui https://github.com/octocat/hello-world/pull/14354
+ghdash 14354                                       # PR #14354 in the current repo
+ghdash octocat/hello-world#14354                   # fully qualified — no git repo needed
+ghdash https://github.com/octocat/hello-world/pull/14354
 ```
 
 A bare number still uses the current worktree's `origin` to resolve owner/repo;
@@ -67,7 +67,7 @@ Compile a standalone binary for the current platform:
 
 ```
 bun run build:binary:single
-# → ./dist/ghdash-tui-<os>-<arch>/bin/ghdash-tui
+# → ./dist/ghdash-<os>-<arch>/bin/ghdash
 ```
 
 `bun run build:binary` cross-compiles for all supported targets
@@ -82,7 +82,7 @@ embedded version without bumping `package.json`.
 
 ## Configuration
 
-Loads user settings from `~/.config/ghdash-tui/config.json`:
+Loads user settings from `~/.config/ghdash/config.json`:
 
 ```json
 {

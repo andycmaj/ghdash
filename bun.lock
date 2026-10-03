@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@andycmaj/ghdash-tui",
+      "name": "@andycmaj/ghdash",
       "dependencies": {
         "@andycmaj/opentui-app": "^0.1.0",
         "@opentui/core": "0.5.12",

@@ -1,10 +1,10 @@
-name: ghdash-tui Beta Release
+name: ghdash Beta Release
 run-name: "beta PR #${{ github.event.pull_request.number }}"
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
-    # Only PRs that can change the ghdash-tui binary get a beta build.
+    # Only PRs that can change the ghdash binary get a beta build.
     paths:
       - src/**
       - script/**
@@ -68,7 +68,7 @@ jobs:
       - name: Stage release assets
         run: |
           shopt -s nullglob
-          for f in dist/ghdash-tui-*/bin/ghdash-tui; do
+          for f in dist/ghdash-*/bin/ghdash; do
             platform=$(basename "$(dirname "$(dirname "$f")")")
             cp "$f" "$platform"
           done
@@ -84,7 +84,7 @@ jobs:
             --target "$SHA" \
             --title "PR #${PR}: ${TITLE}" \
             --generate-notes \
-            ghdash-tui-*
+            ghdash-*
           generated=$(gh release view "$TAG" --json body -q .body)
           {
             bun run script/install-notes.ts "$REPO" "$TAG"

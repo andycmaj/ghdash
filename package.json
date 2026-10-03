@@ -1,11 +1,11 @@
 {
-  "name": "@andycmaj/ghdash-tui",
+  "name": "@andycmaj/ghdash",
   "version": "0.1.1",
   "description": "GitHub PR status dashboard TUI built with OpenTUI Solid",
   "type": "module",
   "private": true,
   "bin": {
-    "ghdash-tui": "./dist/ghdash-tui-linux-x64/bin/ghdash-tui"
+    "ghdash": "./dist/ghdash-linux-x64/bin/ghdash"
   },
   "scripts": {
     "dev": "bun run --conditions=browser --preload @opentui/solid/preload ./src/index.tsx",

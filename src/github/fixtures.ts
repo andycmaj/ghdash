@@ -26,7 +26,7 @@ const ago = (mins: number) => new Date(now - mins * 60_000).toISOString();
 
 const baseRepo: RepoContext = {
   owner: "andycmaj",
-  repo: "ghdash-tui",
+  repo: "ghdash",
   branch: "feat/hot-reload",
 };
 
@@ -47,7 +47,7 @@ const basePr: PRDashboard["pr"] = {
     { name: "enhancement", color: "a2eeef" },
     { name: "dx", color: "5c9cf5" },
   ],
-  url: "https://github.com/andycmaj/ghdash-tui/pull/42",
+  url: "https://github.com/andycmaj/ghdash/pull/42",
   status: "open",
   isDraft: false,
   headRef: "feat/hot-reload",
@@ -273,7 +273,7 @@ export const FIXTURES: Record<string, Fixture> = {
           state: "AWAITING_CHECKS",
           number: 38,
           title: "Bump octokit to v4.1",
-          url: "https://github.com/andycmaj/ghdash-tui/pull/38",
+          url: "https://github.com/andycmaj/ghdash/pull/38",
           author: { login: "dependabot", isBot: true },
           enqueuedAt: ago(14),
           checkStatus: CheckStatus.Running,
@@ -285,7 +285,7 @@ export const FIXTURES: Record<string, Fixture> = {
           state: "AWAITING_CHECKS",
           number: 40,
           title: "Fix flaky poll-loop backoff test",
-          url: "https://github.com/andycmaj/ghdash-tui/pull/40",
+          url: "https://github.com/andycmaj/ghdash/pull/40",
           author: reviewer,
           enqueuedAt: ago(11),
           checkStatus: CheckStatus.Failure,
@@ -309,7 +309,7 @@ export const FIXTURES: Record<string, Fixture> = {
           state: "QUEUED",
           number: 44,
           title: "Document fixture mode in the README",
-          url: "https://github.com/andycmaj/ghdash-tui/pull/44",
+          url: "https://github.com/andycmaj/ghdash/pull/44",
           author: reviewer,
           enqueuedAt: ago(3),
           checkStatus: null,

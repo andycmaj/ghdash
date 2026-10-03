@@ -9,7 +9,7 @@
 //   GHDASH_TUI_BUMP     - "major" | "minor" | "patch" (default "patch")
 //   GHDASH_TUI_VERSION  - explicit version override (wins over bump)
 //
-// Tags are plain vX.Y.Z: ghdash-tui is the only thing released from this repo,
+// Tags are plain vX.Y.Z: ghdash is the only thing released from this repo,
 // and unprefixed tags keep `mise use github:<repo>@1.2.3` pinning natural.
 import path from "path";
 import { $ } from "bun";

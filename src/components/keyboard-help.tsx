@@ -121,7 +121,7 @@ export function KeyboardHelp(props: KeyboardHelpProps) {
         paddingBottom={1}
         flexDirection="column"
       >
-        <text fg={theme.textMuted}>ghdash-tui v{APP_VERSION}</text>
+        <text fg={theme.textMuted}>ghdash v{APP_VERSION}</text>
       </box>
     </Modal>
   );

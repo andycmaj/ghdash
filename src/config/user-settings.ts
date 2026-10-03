@@ -1,4 +1,4 @@
-// User Settings - loads config from ~/.config/ghdash-tui/config.json
+// User Settings - loads config from ~/.config/ghdash/config.json
 
 import { homedir } from "os";
 import { join } from "path";
@@ -34,7 +34,7 @@ export interface RuntimeSettings {
   githubToken?: string;
 }
 
-const CONFIG_DIR = ".config/ghdash-tui";
+const CONFIG_DIR = ".config/ghdash";
 const CONFIG_FILE = "config.json";
 
 export function getConfigPath(): string {

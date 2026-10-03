@@ -60,7 +60,7 @@ const binaries: Record<string, string> = {};
 await $`bun install --os="*" --cpu="*" @opentui/core@${pkg.dependencies["@opentui/core"]}`;
 
 for (const item of targets) {
-  const name = ["ghdash-tui", item.os, item.arch].join("-");
+  const name = ["ghdash", item.os, item.arch].join("-");
   console.log(`Building ${name}...`);
   await $`mkdir -p dist/${name}/bin`;
 
@@ -81,7 +81,7 @@ for (const item of targets) {
       autoloadTsconfig: true,
       autoloadPackageJson: true,
       target: `bun-${item.os}-${item.arch}` as any,
-      outfile: `dist/${name}/bin/ghdash-tui`,
+      outfile: `dist/${name}/bin/ghdash`,
       execArgv: ["--"],
       windows: {},
     },

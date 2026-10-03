@@ -18,7 +18,7 @@ export function installNotes(
   const lines = [
     isBeta ? "## Install (beta)" : "## Install",
     "",
-    "Install and update `ghdash-tui` with [mise](https://mise.jdx.dev):",
+    "Install and update `ghdash` with [mise](https://mise.jdx.dev):",
     "",
     "```sh",
     `mise use -g github:${ref}`,

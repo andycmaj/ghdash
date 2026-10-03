@@ -24,6 +24,7 @@ export const Commands = {
 
   // Sections list
   SECTION_SELECT: "section.select",
+  SECTION_PICKER_OPEN: "section.picker.open",
 
   // Content tree (e.g. Actions workflow → job)
   TOGGLE_EXPAND: "content.toggle.expand",
@@ -31,6 +32,9 @@ export const Commands = {
 
   // Edit the active card (PR Info: title / description / labels)
   CARD_EDIT: "content.card.edit",
+
+  // Reply to the selected review-thread comment in the Feed
+  FEED_REPLY: "content.feed.reply",
 
   // Command palette
   PALETTE_OPEN: "palette.open",

@@ -13,7 +13,7 @@ a tui, based on @opentui/solid, that will show me an interactive status dashboar
 
 - workflows in progress
 - workfflows completed
-- Summaries/annotations/warnings e.g. <https://github.com/valstro/omskit/actions/runs/34373594641/attempts/1#summary-102541424126>
+- Summaries/annotations/warnings e.g. <https://github.com/octocat/hello-world/actions/runs/34373594641/attempts/1#summary-102541424126>
 - links to everything
 - v1: don't stream logs inline
 

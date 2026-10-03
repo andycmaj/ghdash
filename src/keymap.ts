@@ -1,173 +1,116 @@
 import { Commands } from "./commands";
-import { KeyMapping } from "./keyboard/keymap-utils";
+import type { KeymapTable } from "./keyboard/keymap-utils";
+import { FeedItemKind, SectionKey } from "./github/types";
 
-// Declarative keymap configuration
-// Defines all keyboard shortcuts and their associated commands
-export const keymap: KeyMapping[] = [
-  // App-level commands
-  {
-    modes: ["app"],
-    key: "p",
-    modifiers: { ctrl: true },
-    command: Commands.PALETTE_OPEN,
-    description: "palette",
-  },
-  {
-    modes: ["app"],
-    key: ":",
-    command: Commands.PALETTE_OPEN,
-    description: "command palette",
-    showInHelpAs: "commands",
-  },
-  {
-    modes: ["app"],
-    key: "q",
-    command: Commands.APP_QUIT,
-    description: "quit",
-  },
-  {
-    modes: ["app"],
-    key: "c",
-    modifiers: { ctrl: true },
-    command: Commands.APP_QUIT,
-    description: "quit",
-  },
-  {
-    modes: ["app"],
-    key: "e",
-    modifiers: { ctrl: true },
-    command: Commands.SIDEBAR_TOGGLE,
-    description: "sidebar",
-  },
-  {
-    modes: ["app"],
-    key: "tab",
-    command: Commands.FOCUS_NEXT,
-    description: "switch",
-  },
-  {
-    modes: ["app"],
-    key: "r",
-    command: Commands.PR_REFRESH,
-    description: "refresh",
-    showInHelpAs: "refresh",
-  },
-  {
-    modes: ["app"],
-    key: "l",
-    command: Commands.OPEN_LOKI_LOGS,
-    description: "open loki logs",
-    showInHelpAs: "logs",
-  },
-  {
-    modes: ["app"],
-    key: "p",
-    command: Commands.OPEN_PR_LIST,
-    description: "open one of my PRs",
-    showInHelpAs: "my PRs",
-  },
-  {
-    modes: ["app"],
-    key: "y",
-    command: Commands.COPY_PR_LINK,
-    description: "copy PR link",
-    showInHelpAs: "copy link",
-  },
-  {
-    modes: ["app"],
-    key: "?",
-    command: Commands.HELP_OPEN,
-    description: "keyboard help",
-    showInHelpAs: "help",
-  },
+// Declarative keymap configuration, by scope: "app" applies anywhere in the
+// pane layout; "sections" and "content" while focus is within that pane.
+export const keymap: KeymapTable = {
+  app: [
+    { key: "ctrl+p", cmd: Commands.PALETTE_OPEN, desc: "palette" },
+    {
+      key: ":",
+      cmd: Commands.PALETTE_OPEN,
+      desc: "command palette",
+      help: "commands",
+    },
+    {
+      key: "space",
+      cmd: Commands.SECTION_PICKER_OPEN,
+      desc: "section picker",
+      help: "sections",
+    },
+    { key: "q", cmd: Commands.APP_QUIT, desc: "quit" },
+    { key: "ctrl+c", cmd: Commands.APP_QUIT, desc: "quit" },
+    { key: "ctrl+e", cmd: Commands.SIDEBAR_TOGGLE, desc: "sidebar" },
+    { key: "tab", cmd: Commands.FOCUS_NEXT, desc: "switch" },
+    { key: "r", cmd: Commands.PR_REFRESH, desc: "refresh", help: "refresh" },
+    {
+      key: "l",
+      cmd: Commands.OPEN_LOKI_LOGS,
+      desc: "open loki logs",
+      help: "logs",
+    },
+    {
+      key: "p",
+      cmd: Commands.OPEN_PR_LIST,
+      desc: "open one of my PRs",
+      help: "my PRs",
+    },
+    {
+      key: "y",
+      cmd: Commands.COPY_PR_LINK,
+      desc: "copy PR link",
+      help: "copy link",
+    },
+    { key: "?", cmd: Commands.HELP_OPEN, desc: "keyboard help", help: "help" },
+  ],
 
-  // Shared navigation (sections + content)
-  {
-    modes: ["sections", "content"],
-    key: "j",
-    command: Commands.NAV_DOWN,
-    description: "down",
-  },
-  {
-    modes: ["sections", "content"],
-    key: "down",
-    command: Commands.NAV_DOWN,
-    description: "down",
-  },
-  {
-    modes: ["sections", "content"],
-    key: "k",
-    command: Commands.NAV_UP,
-    description: "up",
-  },
-  {
-    modes: ["sections", "content"],
-    key: "up",
-    command: Commands.NAV_UP,
-    description: "up",
-  },
-  {
-    modes: ["sections", "content"],
-    key: "g",
-    command: Commands.NAV_TOP,
-    description: "top",
-  },
-  {
-    modes: ["sections", "content"],
-    key: "g",
-    modifiers: { shift: true },
-    command: Commands.NAV_BOTTOM,
-    description: "bottom",
-  },
-  {
-    modes: ["sections", "content"],
-    key: "o",
-    command: Commands.OPEN_IN_BROWSER,
-    description: "open in browser",
-    showInHelpAs: "open",
-  },
+  sections: [
+    { key: "j", cmd: Commands.NAV_DOWN, desc: "down" },
+    { key: "down", cmd: Commands.NAV_DOWN, desc: "down" },
+    { key: "k", cmd: Commands.NAV_UP, desc: "up" },
+    { key: "up", cmd: Commands.NAV_UP, desc: "up" },
+    { key: "g", cmd: Commands.NAV_TOP, desc: "top" },
+    { key: "shift+g", cmd: Commands.NAV_BOTTOM, desc: "bottom" },
+    {
+      key: "o",
+      cmd: Commands.OPEN_IN_BROWSER,
+      desc: "open in browser",
+      help: "open",
+    },
+    {
+      key: "return",
+      cmd: Commands.SECTION_SELECT,
+      desc: "select",
+      help: "select",
+    },
+  ],
 
-  // Sections-specific
-  {
-    modes: ["sections"],
-    key: "return",
-    command: Commands.SECTION_SELECT,
-    description: "select",
-    showInHelpAs: "select",
-  },
-
-  // Content-specific
-  {
-    modes: ["content"],
-    key: "return",
-    command: Commands.TOGGLE_EXPAND,
-    description: "expand/collapse",
-    showInHelpAs: "expand",
-  },
-  {
-    modes: ["content"],
-    key: "a",
-    command: Commands.TOGGLE_ANNOTATIONS,
-    description: "toggle annotations",
-    showInHelpAs: "annotations",
-  },
-  {
-    modes: ["content"],
-    key: "e",
-    command: Commands.CARD_EDIT,
-    description: "edit",
-    showInHelpAs: "edit",
-  },
-  {
-    modes: ["content"],
-    key: "pageup",
-    command: Commands.SCROLL_PAGEUP,
-    description: "pgup",
-  },
-  {
-    modes: ["content"],
-    key: "pagedown",
-    command: Commands.SCROLL_PAGEDOWN,
-    description: "pgdn",
-  },
-];
+  content: [
+    { key: "j", cmd: Commands.NAV_DOWN, desc: "down" },
+    { key: "down", cmd: Commands.NAV_DOWN, desc: "down" },
+    { key: "k", cmd: Commands.NAV_UP, desc: "up" },
+    { key: "up", cmd: Commands.NAV_UP, desc: "up" },
+    { key: "g", cmd: Commands.NAV_TOP, desc: "top" },
+    { key: "shift+g", cmd: Commands.NAV_BOTTOM, desc: "bottom" },
+    {
+      key: "o",
+      cmd: Commands.OPEN_IN_BROWSER,
+      desc: "open in browser",
+      help: "open",
+    },
+    {
+      key: "return",
+      cmd: Commands.TOGGLE_EXPAND,
+      desc: "expand/collapse",
+      help: "expand",
+      // Enter toggles workflow rows; on PR Info cards it edits (shown as `e`).
+      relevant: (ctx) => ctx.selectedItem?.kind === "workflow",
+    },
+    {
+      key: "a",
+      cmd: Commands.TOGGLE_ANNOTATIONS,
+      desc: "toggle annotations",
+      help: "annotations",
+      relevant: (ctx) => ctx.activeSection === SectionKey.Actions,
+    },
+    {
+      key: "e",
+      cmd: Commands.CARD_EDIT,
+      desc: "edit",
+      help: "edit",
+      relevant: (ctx) => ctx.selectedItem?.kind === "infoCard",
+    },
+    {
+      key: "c",
+      cmd: Commands.FEED_REPLY,
+      desc: "reply to thread",
+      help: "reply",
+      relevant: (ctx) =>
+        ctx.selectedItem?.kind === "feedItem" &&
+        ctx.selectedItem.item.kind === FeedItemKind.ThreadComment,
+    },
+    { key: "pageup", cmd: Commands.SCROLL_PAGEUP, desc: "pgup" },
+    { key: "pagedown", cmd: Commands.SCROLL_PAGEDOWN, desc: "pgdn" },
+  ],
+};

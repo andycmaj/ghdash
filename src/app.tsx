@@ -1,30 +1,35 @@
 // Main App component
 
-import { createEffect, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, Show } from "solid-js";
+import type { Renderable } from "@opentui/core";
 import { useRenderer } from "@opentui/solid";
+import { KeymapProvider, useKeymap } from "@andycmaj/opentui-app";
 import { GithubProvider, useGithub } from "./context/github";
 import { FocusProvider, useFocus } from "./context/focus";
 import { ToastProvider, useToast } from "./context/toast";
+import { HelpContextProvider } from "./context/help-context";
+import { ReplyProvider } from "./context/reply";
 import { ThemeProvider } from "./context/theme";
 import type { ThemeName } from "./theme/theme";
 import { Toast } from "./components/toast";
-import { setGlobalRenderer } from "./global-renderer";
-import { Header } from "./components/header";
+import { keymap } from "./keymap";
+import { ConnectionStatus } from "./components/connection-status";
 import { SectionTree } from "./components/section-tree";
 import { SectionView } from "./components/section-view";
+import { SectionPicker } from "./components/section-picker";
 import {
   CommandPalette,
   type PaletteOption,
 } from "./components/command-palette";
 import { KeyboardHelp } from "./components/keyboard-help";
 import { useTheme } from "./hooks/useTheme";
-import { useKeyHandler } from "./keyboard/useKeyHandler";
+import { useScope } from "./keyboard/keymap-utils";
 import { Commands } from "./commands";
-import { KeyEvent } from "@opentui/core";
 import { MergeConfirmModal } from "./components/merge-confirm-modal";
 import { PrEditModal } from "./components/pr-edit-modal";
 import { PrLabelsModal } from "./components/pr-labels-modal";
 import { PrOpenModal } from "./components/pr-open-modal";
+import { ReplyModal } from "./components/reply-modal";
 import { canMerge } from "./github/status-utils";
 import { openUrl } from "./utils/open-url";
 import { copyToClipboard } from "./utils/copy-to-clipboard";
@@ -34,23 +39,6 @@ import type { PRSpec } from "./github/pr-spec";
 function AppContent() {
   const renderer = useRenderer();
 
-  // Register renderer globally for emergency cleanup
-  onMount(() => {
-    setGlobalRenderer(renderer);
-  });
-  onCleanup(() => {
-    setGlobalRenderer(null);
-  });
-
-  // Debug console activation with the backtick key
-  const debugKeyHandler = (key: KeyEvent) => {
-    if (key.name === "`") {
-      renderer.console.toggle();
-    }
-  };
-  renderer.keyInput.on("keypress", debugKeyHandler);
-  onCleanup(() => renderer.keyInput.off("keypress", debugKeyHandler));
-
   const {
     cyclePane,
     sidebarVisible,
@@ -58,8 +46,9 @@ function AppContent() {
     activeModal,
     openModal,
     closeModal,
-    isModalOpen,
+    activePaneTarget,
   } = useFocus();
+  const keymap = useKeymap();
   const { state, refresh } = useGithub();
   const { showToast } = useToast();
   const theme = useTheme();
@@ -78,67 +67,74 @@ function AppContent() {
     lastErrorToast = err;
   });
 
-  function executeCommand(command: string) {
-    switch (command) {
-      case Commands.APP_QUIT:
-        renderer.destroy();
-        process.exit(0);
-      case Commands.SIDEBAR_TOGGLE:
-        toggleSidebar();
-        break;
-      case Commands.FOCUS_NEXT:
-      case Commands.FOCUS_PREV:
-        cyclePane();
-        break;
-      case Commands.PALETTE_OPEN:
-        openModal("palette");
-        break;
-      case Commands.HELP_OPEN:
-        openModal("help");
-        break;
-      case Commands.OPEN_PR_LIST:
-        openModal("openPr");
-        break;
-      case Commands.COPY_PR_LINK:
-        if (state.pr) {
-          copyToClipboard(state.pr.url).then((ok) =>
-            showToast(
-              ok ? "PR link copied" : "Could not copy link",
-              2000,
-              ok ? undefined : "error",
-            ),
-          );
-        } else {
-          showToast("No PR loaded");
-        }
-        break;
-      case Commands.PR_REFRESH:
-        refresh();
-        showToast("Refreshing…", 1500);
-        break;
-      case Commands.MERGE_PR:
-        if (canMerge(state.pr, state.mergeBlockers)) {
-          openModal("mergeConfirm");
-        } else {
-          showToast("PR is not ready to merge");
-        }
-        break;
-      case Commands.OPEN_LOKI_LOGS:
-        if (state.pr) {
-          openUrl(lokiLogsUrl(state.pr.number));
-          showToast(`Opening logs for dev-${state.pr.number}`);
-        } else {
-          showToast("No PR loaded");
-        }
-        break;
+  function copyPrLink() {
+    if (!state.pr) {
+      showToast("No PR loaded");
+      return;
+    }
+    void copyToClipboard(state.pr.url).then((ok) =>
+      showToast(
+        ok ? "PR link copied" : "Could not copy link",
+        2000,
+        ok ? undefined : "error",
+      ),
+    );
+  }
+
+  function openLokiLogs() {
+    if (!state.pr) {
+      showToast("No PR loaded");
+      return;
+    }
+    const url = lokiLogsUrl(state.pr.number);
+    if (!url) {
+      showToast("Set GHDASH_LOKI_URL to enable logs");
+      return;
+    }
+    openUrl(url);
+    showToast(`Opening logs for dev-${state.pr.number}`);
+  }
+
+  function mergePr() {
+    if (canMerge(state.pr, state.mergeBlockers)) {
+      openModal("mergeConfirm");
+    } else {
+      showToast("PR is not ready to merge");
     }
   }
 
-  // App-level keyboard handling (disabled when any modal is open)
-  useKeyHandler("app", executeCommand, () => !isModalOpen());
+  // App-level bindings, active while focus is anywhere in the pane layout (so
+  // not while a modal holds focus).
+  let layout: Renderable | undefined;
+  useScope(
+    "app",
+    {
+      [Commands.APP_QUIT]: () => {
+        renderer.destroy();
+        process.exit(0);
+      },
+      [Commands.SIDEBAR_TOGGLE]: toggleSidebar,
+      [Commands.FOCUS_NEXT]: cyclePane,
+      [Commands.FOCUS_PREV]: cyclePane,
+      [Commands.PALETTE_OPEN]: () => openModal("palette"),
+      [Commands.HELP_OPEN]: () => openModal("help"),
+      [Commands.SECTION_PICKER_OPEN]: () => openModal("sectionPicker"),
+      [Commands.OPEN_PR_LIST]: () => openModal("openPr"),
+      [Commands.COPY_PR_LINK]: copyPrLink,
+      [Commands.PR_REFRESH]: () => {
+        refresh();
+        showToast("Refreshing…", 1500);
+      },
+      [Commands.MERGE_PR]: mergePr,
+      [Commands.OPEN_LOKI_LOGS]: openLokiLogs,
+    },
+    { target: () => layout },
+  );
 
+  // Run a palette pick through the keymap against the pane the palette was
+  // opened from, so pane commands (open, edit, reply, ...) work too.
   function handlePaletteSelect(option: PaletteOption) {
-    executeCommand(option.command);
+    keymap.dispatchCommand(option.command, { focused: activePaneTarget() });
   }
 
   return (
@@ -149,7 +145,11 @@ function AppContent() {
       backgroundColor={theme.background}
     >
       {/* Main content: SectionTree (sidebar) + SectionView */}
-      <box flexDirection="row" flexGrow={1}>
+      <box
+        ref={(r: Renderable) => (layout = r)}
+        flexDirection="row"
+        flexGrow={1}
+      >
         <Show when={sidebarVisible()}>
           <SectionTree />
         </Show>
@@ -162,6 +162,11 @@ function AppContent() {
           onClose={() => closeModal()}
           onSelect={handlePaletteSelect}
         />
+      </Show>
+
+      {/* Section Picker overlay */}
+      <Show when={activeModal() === "sectionPicker"}>
+        <SectionPicker onClose={() => closeModal()} />
       </Show>
 
       {/* Keyboard Help overlay */}
@@ -190,10 +195,15 @@ function AppContent() {
         <PrOpenModal onClose={() => closeModal()} />
       </Show>
 
-      {/* Header - only shown when sidebar is hidden */}
+      {/* Review-thread reply fallback (when $EDITOR is unavailable) */}
+      <Show when={activeModal() === "reply"}>
+        <ReplyModal />
+      </Show>
+
+      {/* Connection status - only shown when sidebar is hidden */}
       <Show when={!sidebarVisible()}>
         <box flexShrink={0}>
-          <Header />
+          <ConnectionStatus />
         </box>
       </Show>
     </box>
@@ -215,10 +225,16 @@ export function App(props: AppProps) {
         tokenOverride={props.tokenOverride}
         prSpec={props.prSpec}
       >
-        <FocusProvider>
+        <FocusProvider panes={["sections", "content"]}>
           <ToastProvider>
-            <AppContent />
-            <Toast />
+            <KeymapProvider keymap={keymap}>
+              <HelpContextProvider>
+                <ReplyProvider>
+                  <AppContent />
+                  <Toast />
+                </ReplyProvider>
+              </HelpContextProvider>
+            </KeymapProvider>
           </ToastProvider>
         </FocusProvider>
       </GithubProvider>

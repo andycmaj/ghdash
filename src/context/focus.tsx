@@ -1,12 +1,6 @@
-// Focus management context provider
-
-import {
-  createContext,
-  useContext,
-  createSignal,
-  type ParentProps,
-} from "solid-js";
-import { createStore } from "solid-js/store";
+// Focus context comes from the framework. The app's pane and modal id unions
+// stay here as types so component signatures keep their names.
+export { FocusProvider, useFocus } from "@andycmaj/opentui-app";
 
 export type Pane = "sections" | "content";
 
@@ -14,106 +8,10 @@ export type ModalState =
   | "none"
   | "palette"
   | "help"
+  | "sectionPicker"
   | "mergeConfirm"
   | "editTitle"
   | "editBody"
   | "editLabels"
-  | "openPr";
-
-interface FocusState {
-  activePane: Pane;
-}
-
-interface FocusContextValue {
-  state: FocusState;
-  setActivePane: (pane: Pane) => void;
-  cyclePane: () => void;
-  sidebarVisible: () => boolean;
-  toggleSidebar: () => void;
-  activeModal: () => ModalState;
-  openModal: (modal: ModalState) => void;
-  closeModal: () => void;
-  isModalOpen: () => boolean;
-}
-
-const FocusContext = createContext<FocusContextValue>();
-
-export function FocusProvider(props: ParentProps) {
-  const [state, setState] = createStore<FocusState>({
-    activePane: "sections",
-  });
-
-  const [activeModal, setActiveModal] = createSignal<ModalState>("none");
-  const [sidebarOpen, setSidebarOpen] = createSignal(true);
-
-  function setActivePane(pane: Pane) {
-    setState("activePane", pane);
-  }
-
-  function cyclePane() {
-    setState("activePane", (current) => {
-      const next = current === "sections" ? "content" : "sections";
-      // Expand sidebar when focusing the sections list
-      if (next === "sections" && !sidebarOpen()) {
-        setSidebarOpen(true);
-      }
-      return next;
-    });
-  }
-
-  function sidebarVisible() {
-    return sidebarOpen();
-  }
-
-  function toggleSidebar() {
-    setSidebarOpen((prev) => {
-      const newValue = !prev;
-      if (newValue) {
-        // When showing sidebar, focus the sections list
-        setState("activePane", "sections");
-      } else {
-        // When hiding sidebar, focus content pane since the list is no longer visible
-        setState("activePane", "content");
-      }
-      return newValue;
-    });
-  }
-
-  function openModal(modal: ModalState) {
-    setActiveModal(modal);
-  }
-
-  function closeModal() {
-    setActiveModal("none");
-  }
-
-  function isModalOpen() {
-    return activeModal() !== "none";
-  }
-
-  const value: FocusContextValue = {
-    state,
-    setActivePane,
-    cyclePane,
-    sidebarVisible,
-    toggleSidebar,
-    activeModal,
-    openModal,
-    closeModal,
-    isModalOpen,
-  };
-
-  return (
-    <FocusContext.Provider value={value}>
-      {props.children}
-    </FocusContext.Provider>
-  );
-}
-
-export function useFocus() {
-  const context = useContext(FocusContext);
-  if (!context) {
-    throw new Error("useFocus must be used within a FocusProvider");
-  }
-  return context;
-}
+  | "openPr"
+  | "reply";

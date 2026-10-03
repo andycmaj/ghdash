@@ -29,6 +29,7 @@ import {
   type FeedItem,
   type Label,
   type MergeBlocker,
+  type MergeQueueItem,
   type PRDashboard,
   type PrListItem,
   type PullRequest,
@@ -48,6 +49,8 @@ interface GithubState {
   reviewThreads: ReviewThread[];
   checks: CheckRun[];
   mergeBlockers: MergeBlocker[];
+  mergeQueueItems: MergeQueueItem[];
+  mergeQueueChecks: CheckRun[];
   selectedSection: SectionKey;
   lastFetchedAt: string | null;
   error: string | null;
@@ -65,6 +68,7 @@ interface GithubContextValue {
   updatePrBody: (body: string) => Promise<void>;
   getRepoLabels: () => Promise<Label[]>;
   setPrLabels: (labels: Label[]) => Promise<void>;
+  replyToThread: (item: FeedItem, body: string) => Promise<void>;
   // PR switching
   listMyOpenPrs: () => Promise<PrListItem[]>;
   openPr: (item: PrListItem) => void;
@@ -95,6 +99,8 @@ export function GithubProvider(props: ParentProps<GithubProviderProps>) {
     reviewThreads: [],
     checks: [],
     mergeBlockers: [],
+    mergeQueueItems: [],
+    mergeQueueChecks: [],
     selectedSection: SectionKey.Feed,
     lastFetchedAt: null,
     error: null,
@@ -126,6 +132,16 @@ export function GithubProvider(props: ParentProps<GithubProviderProps>) {
         s.reviewThreads = dashboard.reviewThreads;
         s.checks = dashboard.checks;
         s.mergeBlockers = dashboard.mergeBlockers;
+        // `?? []` keeps JSON fixtures captured before the merge queue was added loading.
+        s.mergeQueueItems = dashboard.mergeQueueItems ?? [];
+        s.mergeQueueChecks = dashboard.mergeQueueChecks ?? [];
+        // The section disappears once the PR leaves the queue.
+        if (
+          s.selectedSection === SectionKey.MergeQueue &&
+          !dashboard.pr.mergeQueue
+        ) {
+          s.selectedSection = SectionKey.Mergeability;
+        }
         s.lastFetchedAt = new Date().toISOString();
         s.error = null;
         // Fill the real head branch once known (relevant when targeting a PR by number).
@@ -326,6 +342,31 @@ export function GithubProvider(props: ParentProps<GithubProviderProps>) {
     refresh();
   }
 
+  async function replyToThread(item: FeedItem, body: string) {
+    if (!item.threadId) throw new Error("Not a review-thread comment");
+    if (fixtureMode()) {
+      const reply: FeedItem = {
+        ...item,
+        id: `fixture-reply-${Date.now()}`,
+        author: { login: "you", isBot: false },
+        body,
+        createdAt: new Date().toISOString(),
+        isReply: true,
+      };
+      setState(
+        produce((s) => {
+          s.feed.push(reply);
+          s.reviewThreads
+            .find((t) => t.id === item.threadId)
+            ?.comments.push(reply);
+        }),
+      );
+      return;
+    }
+    await client.replyToThread(item.threadId, body);
+    refresh();
+  }
+
   // The current user's open PRs, offered by the PR picker. In fixture mode
   // there's no network, so surface the single canned PR as the only choice.
   async function listMyOpenPrs(): Promise<PrListItem[]> {
@@ -381,6 +422,7 @@ export function GithubProvider(props: ParentProps<GithubProviderProps>) {
     updatePrBody,
     getRepoLabels,
     setPrLabels,
+    replyToThread,
     listMyOpenPrs,
     openPr,
   };

@@ -1,17 +1,20 @@
-// Keyboard Help Modal - shows all keyboard shortcuts grouped by mode
+// Keyboard Help Modal - shows the keyboard shortcuts relevant to the active
+// section and selected item, grouped by scope
 
 import { TextAttributes } from "@opentui/core";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { createMemo, For } from "solid-js";
+import { BaseCommands, navBindings } from "@andycmaj/opentui-app";
 import { useTheme } from "@/hooks/useTheme";
 import { APP_VERSION } from "../version";
 import { Modal } from "./modal/modal";
 import { ModalHeader } from "./modal/modal-header";
 import { keymap } from "../keymap";
+import { useHelpContext } from "../context/help-context";
 import {
-  formatKeyDisplay,
-  type Mode,
-  type KeyMapping,
+  filterRelevant,
+  getScopeBindings,
+  type HelpBinding,
 } from "../keyboard/keymap-utils";
 
 interface KeyboardHelpProps {
@@ -19,68 +22,60 @@ interface KeyboardHelpProps {
 }
 
 interface HelpGroup {
-  mode: Mode;
   title: string;
-  mappings: KeyMapping[];
+  bindings: HelpBinding[];
 }
+
+const SCOPES = [
+  { scope: "app", title: "Global" },
+  { scope: "sections", title: "Sections List" },
+  { scope: "content", title: "Content View" },
+];
+
+// Extra close keys beyond escape (handled by Modal). The help modal has no
+// text field, so printable keys are safe here.
+const CLOSE_KEYS = ["?", "q"].map((key) => ({
+  key,
+  cmd: "help.close",
+  desc: "close",
+}));
 
 export function KeyboardHelp(props: KeyboardHelpProps) {
   const theme = useTheme();
+  const { context } = useHelpContext();
 
   let scrollRef: ScrollBoxRenderable | undefined;
 
-  const groups = createMemo((): HelpGroup[] => {
-    const modeConfig: { mode: Mode; title: string }[] = [
-      { mode: "app", title: "Global" },
-      { mode: "sections", title: "Sections List" },
-      { mode: "content", title: "Content View" },
-    ];
-
-    return modeConfig.map(({ mode, title }) => {
+  const groups = createMemo((): HelpGroup[] =>
+    SCOPES.map(({ scope, title }) => {
       const seen = new Set<string>();
-      const mappings = keymap.filter((m) => {
-        if (!m.modes.includes(mode)) return false;
-        const key = `${m.command}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
+      const bindings = filterRelevant(
+        getScopeBindings(keymap, scope),
+        context(),
+      ).filter((b) => {
+        if (seen.has(b.cmd)) return false;
+        seen.add(b.cmd);
         return true;
       });
-
-      return { mode, title, mappings };
-    });
-  });
-
-  function handleKeyboard(evt: {
-    name: string;
-    shift?: boolean;
-    preventDefault: () => void;
-  }) {
-    // Additional close keys beyond escape (handled by Modal)
-    if (evt.name === "?" || evt.name === "q") {
-      evt.preventDefault();
-      props.onClose();
-      return;
-    }
-
-    if (evt.name === "j" || evt.name === "down") {
-      evt.preventDefault();
-      scrollRef?.scrollBy(1);
-    } else if (evt.name === "k" || evt.name === "up") {
-      evt.preventDefault();
-      scrollRef?.scrollBy(-1);
-    } else if (evt.name === "g" && !evt.shift) {
-      evt.preventDefault();
-      scrollRef?.scrollTo(0);
-    } else if (evt.name === "g" && evt.shift) {
-      evt.preventDefault();
-      scrollRef?.scrollTo(9999);
-    }
-  }
+      return { title, bindings };
+    }),
+  );
 
   const maxHeight = 15;
 
   return (
-    <Modal size="md" onClose={props.onClose} onKeyboard={handleKeyboard}>
+    <Modal
+      size="md"
+      onClose={props.onClose}
+      bindings={[...CLOSE_KEYS, ...navBindings()]}
+      commands={{
+        "help.close": props.onClose,
+        [BaseCommands.NAV_DOWN]: () => scrollRef?.scrollBy(1),
+        [BaseCommands.NAV_UP]: () => scrollRef?.scrollBy(-1),
+        [BaseCommands.NAV_TOP]: () => scrollRef?.scrollTo(0),
+        [BaseCommands.NAV_BOTTOM]: () => scrollRef?.scrollTo(9999),
+      }}
+    >
       <ModalHeader title="Keyboard Shortcuts" hint="j/k scroll · esc/q/?" />
 
       <scrollbox
@@ -100,16 +95,16 @@ export function KeyboardHelp(props: KeyboardHelpProps) {
                 </text>
               </box>
 
-              <For each={group.mappings}>
-                {(mapping) => (
+              <For each={group.bindings}>
+                {(binding) => (
                   <box flexDirection="row" paddingLeft={2} paddingRight={2}>
                     <box width={12}>
                       <text fg={theme.primary} attributes={TextAttributes.BOLD}>
-                        {formatKeyDisplay(mapping)}
+                        {binding.keys}
                       </text>
                     </box>
                     <text fg={theme.text} flexGrow={1}>
-                      {mapping.description}
+                      {binding.desc}
                     </text>
                   </box>
                 )}

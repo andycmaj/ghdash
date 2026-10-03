@@ -9,11 +9,11 @@ import {
 import { useTheme } from "@/hooks/useTheme";
 import { truncate } from "@/utils/truncate";
 
-interface HeaderProps {
+interface ConnectionStatusProps {
   narrow?: boolean;
 }
 
-export function Header(props: HeaderProps) {
+export function ConnectionStatus(props: ConnectionStatusProps) {
   const { state } = useGithub();
   const theme = useTheme();
 
@@ -37,11 +37,8 @@ export function Header(props: HeaderProps) {
 
   const rightText = createMemo(() => {
     if (state.error) return "error";
-    if (state.lastFetchedAt) {
-      const rel = formatRelativeTime(state.lastFetchedAt);
-      return rel === "just now" ? "updated now" : `updated ${rel}`;
-    }
-    return connectionStatusText(state.connectionStatus).toLowerCase();
+
+    return "";
   });
 
   if (isNarrow()) {

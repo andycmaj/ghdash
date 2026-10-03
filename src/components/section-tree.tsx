@@ -1,125 +1,84 @@
 // Section list (sidebar): Feed / Actions / Mergeability for the current PR.
 
-import { createSignal, createMemo, For, Show, createSelector } from "solid-js";
+import {
+  createSignal,
+  createMemo,
+  createEffect,
+  For,
+  Show,
+  createSelector,
+} from "solid-js";
 import { useGithub } from "../context/github";
+import { usePane } from "@andycmaj/opentui-app";
 import { useFocus } from "../context/focus";
-import { useKeyHandler } from "../keyboard/useKeyHandler";
+import { useScope } from "../keyboard/keymap-utils";
 import { focusBorder, prStatusColor } from "../theme/theme";
 import { contrastingForeground } from "@/theme/color";
 import { useTheme } from "@/hooks/useTheme";
-import { Header } from "./header";
+import { ConnectionStatus } from "./connection-status";
 import { PaneHeader } from "./pane-header";
 import { useToast } from "../context/toast";
 import { Commands } from "@/commands";
-import { countChecks, prStatusLabel } from "@/github/status-utils";
+import { prStatusLabel } from "@/github/status-utils";
 import { PRStatus, SectionKey } from "@/github/types";
+import { useSections, useSectionSummary } from "./section-summary";
 import { truncate } from "@/utils/truncate";
 import { openUrl } from "@/utils/open-url";
 
-interface SectionDef {
-  key: SectionKey;
-  label: string;
-}
-
-const SECTIONS: SectionDef[] = [
-  { key: SectionKey.Feed, label: "Feed" },
-  { key: SectionKey.Actions, label: "Actions" },
-  { key: SectionKey.Mergeability, label: "Mergeability" },
-];
-
 export function SectionTree() {
   const { state, selectSection } = useGithub();
-  const { state: focusState, setActivePane } = useFocus();
+  const { setActivePane } = useFocus();
+  const pane = usePane("sections");
   const { showToast } = useToast();
   const theme = useTheme();
 
   // Navigable rows: the PR header (index 0 → Info) followed by the sections.
-  const NAV_COUNT = SECTIONS.length + 1;
+  const sections = useSections();
+  const navCount = () => sections().length + 1;
   const keyForIndex = (index: number): SectionKey =>
-    index === 0 ? SectionKey.Info : SECTIONS[index - 1].key;
+    index === 0 ? SectionKey.Info : sections()[index - 1].key;
 
-  const initialIndex =
-    state.selectedSection === SectionKey.Info
+  const indexForKey = (key: SectionKey): number =>
+    key === SectionKey.Info
       ? 0
-      : SECTIONS.findIndex((s) => s.key === state.selectedSection) + 1;
-  const [cursor, setCursor] = createSignal(initialIndex < 0 ? 0 : initialIndex);
+      : Math.max(0, sections().findIndex((s) => s.key === key) + 1);
+  const [cursor, setCursor] = createSignal(indexForKey(state.selectedSection));
+  // Follow selection changes made elsewhere (e.g. the section picker), and
+  // re-anchor when the Merge queue row appears or disappears.
+  createEffect(() => setCursor(indexForKey(state.selectedSection)));
   const isSelected = createSelector(cursor);
   const headerSelected = createMemo(() => cursor() === 0);
 
-  const isFocused = createMemo(() => focusState.activePane === "sections");
+  const isFocused = pane.isFocused;
 
-  // Right-aligned summary for each section.
-  function sectionSummary(key: SectionKey): {
-    text: string;
-    color: string | undefined;
-  } {
-    switch (key) {
-      case SectionKey.Feed:
-        return { text: `${state.feed.length}`, color: theme.textMuted };
-      case SectionKey.Actions: {
-        const c = countChecks(state.checks);
-        if (c.total === 0) return { text: "—", color: theme.textMuted };
-        if (c.failure > 0)
-          return { text: `✗ ${c.failure}`, color: theme.error };
-        if (c.running + c.pending > 0)
-          return { text: `◐ ${c.running + c.pending}`, color: theme.info };
-        return { text: `✓ ${c.success}`, color: theme.success };
-      }
-      case SectionKey.Mergeability: {
-        const pr = state.pr;
-        if (pr?.status === PRStatus.Merged)
-          return { text: "merged", color: theme.accent };
-        if (pr?.status === PRStatus.Closed)
-          return { text: "closed", color: theme.error };
-        if (pr?.mergeQueue) return { text: "queued", color: theme.info };
-        const unmet = state.mergeBlockers.filter((b) => !b.satisfied).length;
-        if (state.mergeBlockers.length === 0)
-          return { text: "—", color: theme.textMuted };
-        return unmet > 0
-          ? { text: `! ${unmet}`, color: theme.warning }
-          : { text: "ready", color: theme.success };
-      }
-      default:
-        return { text: "", color: theme.textMuted };
-    }
-  }
+  const sectionSummary = useSectionSummary();
 
   function moveCursor(next: number) {
-    const clamped = Math.max(0, Math.min(next, NAV_COUNT - 1));
+    const clamped = Math.max(0, Math.min(next, navCount() - 1));
     setCursor(clamped);
     // Content follows the cursor immediately.
     selectSection(keyForIndex(clamped));
   }
 
-  useKeyHandler(
+  useScope(
     "sections",
-    (command) => {
-      switch (command) {
-        case Commands.NAV_DOWN:
-          moveCursor(cursor() + 1);
-          break;
-        case Commands.NAV_UP:
-          moveCursor(cursor() - 1);
-          break;
-        case Commands.NAV_TOP:
-          moveCursor(0);
-          break;
-        case Commands.NAV_BOTTOM:
-          moveCursor(NAV_COUNT - 1);
-          break;
-        case Commands.SECTION_SELECT:
-          selectSection(keyForIndex(cursor()));
-          setActivePane("content");
-          break;
-        case Commands.OPEN_IN_BROWSER:
-          if (state.pr) {
-            openUrl(state.pr.url);
-            showToast("Opening in browser");
-          }
-          break;
-      }
+    {
+      [Commands.NAV_DOWN]: () => moveCursor(cursor() + 1),
+      [Commands.NAV_UP]: () => moveCursor(cursor() - 1),
+      [Commands.NAV_TOP]: () => moveCursor(0),
+      [Commands.NAV_BOTTOM]: () => moveCursor(navCount() - 1),
+      [Commands.SECTION_SELECT]: () => {
+        selectSection(keyForIndex(cursor()));
+        setActivePane("content");
+      },
+      [Commands.OPEN_IN_BROWSER]: () => {
+        if (state.pr) {
+          openUrl(state.pr.url);
+          showToast("Opening in browser");
+        }
+      },
     },
-    isFocused,
+    { target: pane.target },
   );
 
   const prTitleColor = createMemo(() =>
@@ -139,6 +98,7 @@ export function SectionTree() {
 
   return (
     <box
+      ref={pane.ref}
       flexDirection="column"
       backgroundColor={theme.contentPane}
       flexGrow={0}
@@ -200,7 +160,7 @@ export function SectionTree() {
 
       {/* Section list */}
       <box flexDirection="column" flexGrow={1} paddingTop={1} paddingLeft={1}>
-        <For each={SECTIONS}>
+        <For each={sections()}>
           {(section, index) => {
             const selectedRow = createMemo(() => isSelected(index() + 1));
             const summary = createMemo(() => sectionSummary(section.key));
@@ -237,7 +197,7 @@ export function SectionTree() {
       </box>
 
       {/* Connection/poll status at bottom of sidebar */}
-      <Header narrow={true} />
+      <ConnectionStatus narrow={true} />
     </box>
   );
 }

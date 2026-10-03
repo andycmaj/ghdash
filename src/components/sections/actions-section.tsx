@@ -74,6 +74,7 @@ export function ActionsSection(
   props: SectionProps & {
     nodes: () => ActionsNode[];
     showAnnotations: () => boolean;
+    emptyText?: string;
   },
 ) {
   const theme = useTheme();
@@ -82,7 +83,11 @@ export function ActionsSection(
   return (
     <Show
       when={workflows().length > 0}
-      fallback={<text fg={theme.textMuted}>No checks reported.</text>}
+      fallback={
+        <text fg={theme.textMuted}>
+          {props.emptyText ?? "No checks reported."}
+        </text>
+      }
     >
       <For each={workflows()}>
         {(wf) => (

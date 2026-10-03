@@ -14,6 +14,7 @@ import type { Label } from "@/github/types";
 import { Modal } from "./modal/modal";
 import { ModalHeader } from "./modal/modal-header";
 import { ModalFilterInput } from "./modal/modal-filter-input";
+import { ModalCommands, modalNavBindings } from "@andycmaj/opentui-app";
 
 interface PrLabelsModalProps {
   onClose: () => void;
@@ -78,41 +79,29 @@ export function PrLabelsModal(props: PrLabelsModalProps) {
     }
   }
 
-  function handleKeyboard(evt: {
-    name: string;
-    ctrl?: boolean;
-    preventDefault: () => void;
-  }) {
-    if (evt.name === "up" || (evt.ctrl && evt.name === "k")) {
-      evt.preventDefault();
-      nav.move(-1);
-      return;
-    }
-    if (evt.name === "down" || (evt.ctrl && evt.name === "j")) {
-      evt.preventDefault();
-      nav.move(1);
-      return;
-    }
-    if (evt.name === "return") {
-      evt.preventDefault();
-      const label = filtered()[nav.selected()];
-      if (label) toggle(label.name);
-      return;
-    }
-    if (evt.ctrl && evt.name === "s") {
-      evt.preventDefault();
-      save();
-      return;
-    }
-  }
-
   const dotColor = (label: Label) =>
     /^[0-9a-fA-F]{6}$/.test(label.color)
       ? `#${label.color}`
       : (theme.accent ?? undefined);
 
   return (
-    <Modal size="md" onClose={props.onClose} onKeyboard={handleKeyboard}>
+    <Modal
+      size="md"
+      onClose={props.onClose}
+      bindings={[
+        ...modalNavBindings,
+        { key: "ctrl+s", cmd: "labels.save", desc: "save" },
+      ]}
+      commands={{
+        [ModalCommands.MODAL_UP]: () => nav.move(-1),
+        [ModalCommands.MODAL_DOWN]: () => nav.move(1),
+        [ModalCommands.MODAL_SELECT]: () => {
+          const label = filtered()[nav.selected()];
+          if (label) toggle(label.name);
+        },
+        "labels.save": () => void save(),
+      }}
+    >
       <ModalHeader
         title="Edit labels"
         hint="↑↓ move · enter toggle · ctrl+s save · esc"

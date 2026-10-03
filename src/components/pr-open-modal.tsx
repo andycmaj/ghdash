@@ -15,6 +15,7 @@ import { truncate } from "../utils/truncate";
 import { Modal } from "./modal/modal";
 import { ModalHeader } from "./modal/modal-header";
 import { ModalFilterInput } from "./modal/modal-filter-input";
+import { ModalCommands, modalNavBindings } from "@andycmaj/opentui-app";
 
 interface PrOpenModalProps {
   onClose: () => void;
@@ -73,35 +74,21 @@ export function PrOpenModal(props: PrOpenModalProps) {
     props.onClose();
   }
 
-  function handleKeyboard(evt: {
-    name: string;
-    ctrl?: boolean;
-    preventDefault: () => void;
-  }) {
-    if (evt.name === "up" || (evt.ctrl && evt.name === "k")) {
-      evt.preventDefault();
-      nav.move(-1);
-      return;
-    }
-    if (evt.name === "down" || (evt.ctrl && evt.name === "j")) {
-      evt.preventDefault();
-      nav.move(1);
-      return;
-    }
-    if (evt.name === "return") {
-      evt.preventDefault();
-      const pr = filtered()[nav.selected()];
-      if (pr) open(pr);
-      return;
-    }
-  }
-
   return (
-    <Modal size="lg" onClose={props.onClose} onKeyboard={handleKeyboard}>
-      <ModalHeader
-        title="My open PRs"
-        hint="↑↓ move · enter open · esc"
-      />
+    <Modal
+      size="lg"
+      onClose={props.onClose}
+      bindings={modalNavBindings}
+      commands={{
+        [ModalCommands.MODAL_UP]: () => nav.move(-1),
+        [ModalCommands.MODAL_DOWN]: () => nav.move(1),
+        [ModalCommands.MODAL_SELECT]: () => {
+          const pr = filtered()[nav.selected()];
+          if (pr) open(pr);
+        },
+      }}
+    >
+      <ModalHeader title="My open PRs" hint="↑↓ move · enter open · esc" />
 
       <ModalFilterInput
         onInput={(v) => nav.setFilter(v)}
@@ -137,7 +124,9 @@ export function PrOpenModal(props: PrOpenModalProps) {
               {(pr, index) => {
                 const isCursor = () => index() === nav.selected();
                 const fg = () =>
-                  isCursor() ? contrastingForeground(theme.primary) : theme.text;
+                  isCursor()
+                    ? contrastingForeground(theme.primary)
+                    : theme.text;
                 const mutedFg = () =>
                   isCursor()
                     ? contrastingForeground(theme.primary)

@@ -3,29 +3,31 @@ import { parsePrSpec } from "./pr-spec";
 
 describe("parsePrSpec", () => {
   test("full https url", () => {
-    expect(parsePrSpec("https://github.com/valstro/omskit/pull/14354")).toEqual(
-      { owner: "valstro", repo: "omskit", number: 14354 },
-    );
+    expect(
+      parsePrSpec("https://github.com/octocat/hello-world/pull/14354"),
+    ).toEqual({ owner: "octocat", repo: "hello-world", number: 14354 });
   });
 
   test("url with trailing path/fragment", () => {
     expect(
-      parsePrSpec("https://github.com/valstro/omskit/pull/14354/files#foo"),
-    ).toEqual({ owner: "valstro", repo: "omskit", number: 14354 });
+      parsePrSpec(
+        "https://github.com/octocat/hello-world/pull/14354/files#foo",
+      ),
+    ).toEqual({ owner: "octocat", repo: "hello-world", number: 14354 });
   });
 
   test("host without scheme", () => {
-    expect(parsePrSpec("github.com/valstro/omskit/pull/7")).toEqual({
-      owner: "valstro",
-      repo: "omskit",
+    expect(parsePrSpec("github.com/octocat/hello-world/pull/7")).toEqual({
+      owner: "octocat",
+      repo: "hello-world",
       number: 7,
     });
   });
 
   test("owner/repo#number", () => {
-    expect(parsePrSpec("valstro/omskit#14354")).toEqual({
-      owner: "valstro",
-      repo: "omskit",
+    expect(parsePrSpec("octocat/hello-world#14354")).toEqual({
+      owner: "octocat",
+      repo: "hello-world",
       number: 14354,
     });
   });
@@ -45,6 +47,6 @@ describe("parsePrSpec", () => {
   test("returns null for junk", () => {
     expect(parsePrSpec("not-a-pr")).toBeNull();
     expect(parsePrSpec("")).toBeNull();
-    expect(parsePrSpec("valstro/omskit")).toBeNull();
+    expect(parsePrSpec("octocat/hello-world")).toBeNull();
   });
 });

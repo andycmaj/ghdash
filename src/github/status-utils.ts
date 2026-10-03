@@ -234,7 +234,7 @@ export function computeMergeBlockers(
   const reviewRequired = pr.reviewDecision === "REVIEW_REQUIRED";
   if (reviewChanges || reviewRequired || reviewApproved) {
     // Name who we're still waiting on so an unsatisfied review requirement is
-    // actionable (e.g. "waiting on valstro/valstro-market-data-guild") instead
+    // actionable (e.g. "waiting on octo-org/platform-reviewers") instead
     // of a bare "review required".
     const waitingOn = pr.reviewRequests.map((r) => r.name).join(", ");
     const suffix = waitingOn ? ` — waiting on ${waitingOn}` : "";

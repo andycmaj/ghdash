@@ -259,7 +259,7 @@ describe("computeMergeBlockers", () => {
       makePR({
         reviewDecision: "REVIEW_REQUIRED",
         reviewRequests: [
-          { name: "valstro/valstro-market-data-guild", isTeam: true },
+          { name: "octo-org/platform-reviewers", isTeam: true },
           { name: "@octocat", isTeam: false },
         ],
       }),
@@ -271,7 +271,7 @@ describe("computeMergeBlockers", () => {
     );
     expect(review?.satisfied).toBe(false);
     expect(review?.description).toBe(
-      "Required review not yet approved — waiting on valstro/valstro-market-data-guild, @octocat",
+      "Required review not yet approved — waiting on octo-org/platform-reviewers, @octocat",
     );
   });
 

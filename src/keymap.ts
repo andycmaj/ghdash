@@ -42,6 +42,12 @@ export const keymap: KeymapTable = {
       desc: "copy PR link",
       help: "copy link",
     },
+    {
+      key: "d",
+      cmd: Commands.TOGGLE_DRAFT,
+      desc: "toggle draft/ready",
+      help: "draft/ready",
+    },
     { key: "?", cmd: Commands.HELP_OPEN, desc: "keyboard help", help: "help" },
   ],
 

@@ -24,6 +24,8 @@ import { getRepoContext } from "../github/repo-context";
 import { loadFixture } from "../github/fixtures";
 import type { PRSpec } from "../github/pr-spec";
 import {
+  MergeBlockerKind,
+  PRStatus,
   SectionKey,
   type CheckRun,
   type FeedItem,
@@ -68,6 +70,8 @@ interface GithubContextValue {
   updatePrBody: (body: string) => Promise<void>;
   getRepoLabels: () => Promise<Label[]>;
   setPrLabels: (labels: Label[]) => Promise<void>;
+  togglingDraft: Accessor<boolean>;
+  togglePrDraft: () => Promise<boolean | undefined>;
   replyToThread: (item: FeedItem, body: string) => Promise<void>;
   // PR switching
   listMyOpenPrs: () => Promise<PrListItem[]>;
@@ -342,6 +346,47 @@ export function GithubProvider(props: ParentProps<GithubProviderProps>) {
     refresh();
   }
 
+  const [togglingDraft, setTogglingDraft] = createSignal(false);
+
+  // Flip the PR between draft and ready for review. Resolves to the new isDraft
+  // value, or undefined when there was nothing to toggle.
+  async function togglePrDraft(): Promise<boolean | undefined> {
+    const pr = state.pr;
+    if (!pr || togglingDraft()) return undefined;
+    if (pr.status !== PRStatus.Open && pr.status !== PRStatus.Draft) {
+      return undefined;
+    }
+    const isDraft = !pr.isDraft;
+    if (fixtureMode()) {
+      setState(
+        produce((s) => {
+          if (!s.pr) return;
+          s.pr.isDraft = isDraft;
+          s.pr.status = isDraft ? PRStatus.Draft : PRStatus.Open;
+          const blocker = s.mergeBlockers.find(
+            (b) => b.kind === MergeBlockerKind.Draft,
+          );
+          if (blocker) blocker.satisfied = !isDraft;
+          else if (isDraft)
+            s.mergeBlockers.unshift({
+              kind: MergeBlockerKind.Draft,
+              description: "PR is a draft",
+              satisfied: false,
+            });
+        }),
+      );
+      return isDraft;
+    }
+    setTogglingDraft(true);
+    try {
+      await client.setPrDraft(pr.nodeId, isDraft);
+      refresh();
+      return isDraft;
+    } finally {
+      setTogglingDraft(false);
+    }
+  }
+
   async function replyToThread(item: FeedItem, body: string) {
     if (!item.threadId) throw new Error("Not a review-thread comment");
     if (fixtureMode()) {
@@ -422,6 +467,8 @@ export function GithubProvider(props: ParentProps<GithubProviderProps>) {
     updatePrBody,
     getRepoLabels,
     setPrLabels,
+    togglingDraft,
+    togglePrDraft,
     replyToThread,
     listMyOpenPrs,
     openPr,

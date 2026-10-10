@@ -1,19 +1,28 @@
 // PR Info view: title, description and labels, each in its own card. The active
 // card shows an "(edit)" hint; pressing `e`/enter (handled by the content pane)
-// opens the matching edit modal. Card order matches the edit-target indices in
-// section-view: 0 = title, 1 = description, 2 = labels.
+// opens the matching edit modal (or flips draft/ready on the status card). Card
+// order matches the edit-target indices in section-view: 0 = title,
+// 1 = description, 2 = labels, 3 = status.
 
 import { For, Show, type JSX } from "solid-js";
 import { useGithub } from "@/context/github";
 import { useTheme } from "@/hooks/useTheme";
 import { Card } from "@/components/card";
 import { Markdown } from "@/components/markdown/markdown";
-import type { Label } from "@/github/types";
+import { PRStatus, type Label } from "@/github/types";
+import { prStatusLabel } from "@/github/status-utils";
 import type { SectionProps } from "./sections/common";
 
 export function PrInfo(props: SectionProps) {
-  const { state } = useGithub();
+  const { state, togglingDraft } = useGithub();
   const theme = useTheme();
+
+  const canToggleDraft = () =>
+    state.pr!.status === PRStatus.Open || state.pr!.status === PRStatus.Draft;
+  const statusHint = () => {
+    if (!canToggleDraft()) return null;
+    return state.pr!.isDraft ? "(mark ready)" : "(convert to draft)";
+  };
 
   // Card border + padding eats ~4 columns.
   const bodyWidth = () => Math.max(10, props.width - 4);
@@ -62,6 +71,26 @@ export function PrInfo(props: SectionProps) {
           </box>
         </Show>
       </InfoCard>
+
+      <InfoCard
+        title="Status"
+        id={props.idFor(3)}
+        selected={props.selected() === 3}
+        hint={statusHint()}
+      >
+        <Show
+          when={!togglingDraft()}
+          fallback={<text fg={theme.warning}>Updating…</text>}
+        >
+          <text fg={state.pr!.isDraft ? theme.textMuted : theme.success}>
+            {state.pr!.isDraft
+              ? "draft"
+              : canToggleDraft()
+                ? "ready for review"
+                : prStatusLabel(state.pr!.status)}
+          </text>
+        </Show>
+      </InfoCard>
     </Show>
   );
 }
@@ -70,6 +99,8 @@ function InfoCard(props: {
   title: string;
   id: string;
   selected: boolean;
+  // null hides the hint (e.g. a merged PR's status can't be toggled).
+  hint?: string | null;
   children: JSX.Element;
 }) {
   const theme = useTheme();
@@ -79,8 +110,8 @@ function InfoCard(props: {
       <text fg={theme.primary} attributes={1}>
         {props.title}
       </text>
-      <Show when={props.selected}>
-        <text fg={theme.textMuted}>(edit)</text>
+      <Show when={props.selected && props.hint !== null}>
+        <text fg={theme.textMuted}>{props.hint ?? "(edit)"}</text>
       </Show>
     </box>
   );

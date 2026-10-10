@@ -49,7 +49,7 @@ function AppContent() {
     activePaneTarget,
   } = useFocus();
   const keymap = useKeymap();
-  const { state, refresh } = useGithub();
+  const { state, refresh, togglePrDraft } = useGithub();
   const { showToast } = useToast();
   const theme = useTheme();
 
@@ -103,6 +103,25 @@ function AppContent() {
     }
   }
 
+  function toggleDraft() {
+    if (!state.pr) {
+      showToast("No PR loaded");
+      return;
+    }
+    togglePrDraft().then(
+      (isDraft) => {
+        if (isDraft === undefined) return;
+        showToast(isDraft ? "Converted to draft" : "Marked ready for review");
+      },
+      (err: unknown) =>
+        showToast(
+          err instanceof Error ? err.message : String(err),
+          6000,
+          "error",
+        ),
+    );
+  }
+
   // App-level bindings, active while focus is anywhere in the pane layout (so
   // not while a modal holds focus).
   let layout: Renderable | undefined;
@@ -126,6 +145,7 @@ function AppContent() {
         showToast("Refreshing…", 1500);
       },
       [Commands.MERGE_PR]: mergePr,
+      [Commands.TOGGLE_DRAFT]: toggleDraft,
       [Commands.OPEN_LOKI_LOGS]: openLokiLogs,
     },
     { target: () => layout },
@@ -200,7 +220,7 @@ function AppContent() {
         <ReplyModal />
       </Show>
 
-      {/* Connection status - only shown when sidebar is hidden */}
+      {/* PR title + branch footer - only shown when sidebar is hidden */}
       <Show when={!sidebarVisible()}>
         <box flexShrink={0}>
           <ConnectionStatus />

@@ -1,10 +1,11 @@
 import { createMemo, Show } from "solid-js";
+import { useTerminalDimensions } from "@opentui/solid";
 import { useGithub } from "../context/github";
 import {
   connectionStatusIcon,
   connectionStatusColor,
   connectionStatusText,
-  formatRelativeTime,
+  prStatusColor,
 } from "../theme/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { truncate } from "@/utils/truncate";
@@ -16,6 +17,7 @@ interface ConnectionStatusProps {
 export function ConnectionStatus(props: ConnectionStatusProps) {
   const { state } = useGithub();
   const theme = useTheme();
+  const dimensions = useTerminalDimensions();
 
   const isNarrow = () => props.narrow ?? false;
 
@@ -26,7 +28,7 @@ export function ConnectionStatus(props: ConnectionStatusProps) {
     connectionStatusColor(theme, state.connectionStatus),
   );
 
-  // Repo/branch label, or a fetch status when nothing has loaded yet.
+  // Repo label, or a fetch status when nothing has loaded yet.
   const statusLine = createMemo(() => {
     const icon = connectionIcon();
     if (state.repo) {
@@ -41,25 +43,31 @@ export function ConnectionStatus(props: ConnectionStatusProps) {
     return "";
   });
 
+  const branchLine = () =>
+    state.pr ? `${state.pr.headRef} → ${state.pr.baseRef}` : "";
+
+  // Leave room for margins/padding (6), "PR #N " and the right-hand text.
+  const titleWidth = createMemo(() => {
+    const prLabel = state.pr ? `PR #${state.pr.number} `.length : 0;
+    const right = (rightText() || branchLine()).length;
+    return Math.max(10, dimensions().width - 6 - prLabel - right - 2);
+  });
+
   if (isNarrow()) {
     return (
       <box
         flexDirection="column"
-        padding={1}
+        paddingTop={1}
         paddingLeft={2}
         paddingRight={2}
         flexShrink={0}
+        marginBottom={1}
       >
-        <box flexDirection="row" justifyContent="space-between">
-          <text fg={connectionColor()} attributes={1}>
-            {statusLine()}
-          </text>
-        </box>
-        <Show when={state.repo}>
-          <text fg={theme.textMuted}>{truncate(state.repo!.branch, 28)}</text>
+        <Show when={state.error}>
+          <text fg={theme.error}>{rightText()}</text>
         </Show>
-        <text fg={state.error ? theme.error : theme.textMuted}>
-          {rightText()}
+        <text fg={connectionColor()} attributes={1}>
+          {statusLine()}
         </text>
       </box>
     );
@@ -77,14 +85,23 @@ export function ConnectionStatus(props: ConnectionStatusProps) {
       flexShrink={0}
     >
       <box flexDirection="row" justifyContent="space-between" width="100%">
-        <text fg={connectionColor()} attributes={1}>
-          {statusLine()}
-          <Show when={state.pr}>
-            <span style={{ fg: theme.text }}> #{state.pr!.number}</span>
-          </Show>
-        </text>
+        <Show
+          when={state.pr}
+          fallback={
+            <text fg={connectionColor()} attributes={1}>
+              {statusLine()}
+            </text>
+          }
+        >
+          <text fg={prStatusColor(theme, state.pr!.status)} attributes={1}>
+            PR #{state.pr!.number}{" "}
+            <span style={{ fg: theme.text }}>
+              {truncate(state.pr!.title, titleWidth())}
+            </span>
+          </text>
+        </Show>
         <text fg={state.error ? theme.error : theme.textMuted}>
-          {rightText()}
+          {rightText() || branchLine()}
         </text>
       </box>
     </box>

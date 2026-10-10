@@ -11,6 +11,7 @@ export const Commands = {
   OPEN_PR_LIST: "pr.open.list",
   COPY_PR_LINK: "pr.copy.link",
   MERGE_PR: "pr.merge",
+  TOGGLE_DRAFT: "pr.toggle.draft",
 
   // Navigation (shared between sections list and content pane)
   NAV_DOWN: "nav.down",

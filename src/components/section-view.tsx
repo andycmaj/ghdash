@@ -15,7 +15,7 @@ import { createStore } from "solid-js/store";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import { useGithub } from "../context/github";
-import { usePane } from "@andycmaj/opentui-app";
+import { useKeymap, usePane } from "@andycmaj/opentui-app";
 import { useFocus } from "../context/focus";
 import { useToast } from "../context/toast";
 import { canReply, useReply } from "../context/reply";
@@ -47,10 +47,11 @@ const SIDEBAR_WIDTH = 44;
 const nodeUrl = (n: ActionsNode): string | undefined =>
   n.kind === "workflow" ? n.group.url : n.check.url;
 
-const INFO_CARDS: InfoCard[] = ["title", "body", "labels"];
+const INFO_CARDS: InfoCard[] = ["title", "body", "labels", "status"];
 
 export function SectionView() {
   const { state } = useGithub();
+  const keymap = useKeymap();
   const { openModal } = useFocus();
   const pane = usePane("content");
   const { showToast } = useToast();
@@ -119,8 +120,8 @@ export function SectionView() {
   const itemUrls = createMemo<(string | undefined)[]>(() => {
     switch (state.selectedSection) {
       case SectionKey.Info:
-        // Three cards (title / description / labels); `o` opens the PR itself.
-        return state.pr ? [undefined, undefined, undefined] : [];
+        // One entry per card; `o` opens the PR itself.
+        return state.pr ? INFO_CARDS.map(() => undefined) : [];
       case SectionKey.Feed:
         return state.feed.map((f) => f.url);
       case SectionKey.Actions:
@@ -242,7 +243,8 @@ export function SectionView() {
     }
   }
 
-  // Open the edit modal for the active PR Info card (0 title / 1 body / 2 labels).
+  // Open the edit modal for the active PR Info card (0 title / 1 body / 2 labels),
+  // or flip draft/ready on the status card (3).
   function editCurrentCard() {
     if (state.selectedSection !== SectionKey.Info || !state.pr) return;
     switch (cursor()) {
@@ -254,6 +256,12 @@ export function SectionView() {
         break;
       case 2:
         openModal("editLabels");
+        break;
+      case 3:
+        // Same path as the app-level `d` binding, which owns the feedback toast.
+        keymap.dispatchCommand(Commands.TOGGLE_DRAFT, {
+          focused: pane.target(),
+        });
         break;
     }
   }

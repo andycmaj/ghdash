@@ -224,6 +224,20 @@ mutation UpdatePr($id: ID!, $title: String, $body: String) {
   }
 }`;
 
+const MARK_READY_MUTATION = `
+mutation MarkReady($id: ID!) {
+  markPullRequestReadyForReview(input: { pullRequestId: $id }) {
+    pullRequest { id isDraft }
+  }
+}`;
+
+const CONVERT_TO_DRAFT_MUTATION = `
+mutation ConvertToDraft($id: ID!) {
+  convertPullRequestToDraft(input: { pullRequestId: $id }) {
+    pullRequest { id isDraft }
+  }
+}`;
+
 const REPLY_TO_THREAD_MUTATION = `
 mutation ReplyToThread($threadId: ID!, $body: String!) {
   addPullRequestReviewThreadReply(input: { pullRequestReviewThreadId: $threadId, body: $body }) {
@@ -352,6 +366,14 @@ export class GithubClient {
       title: fields.title ?? null,
       body: fields.body ?? null,
     });
+  }
+
+  async setPrDraft(prNodeId: string, isDraft: boolean): Promise<void> {
+    const octokit = await this.getOctokit();
+    await octokit.graphql(
+      isDraft ? CONVERT_TO_DRAFT_MUTATION : MARK_READY_MUTATION,
+      { id: prNodeId },
+    );
   }
 
   async replyToThread(threadId: string, body: string): Promise<void> {

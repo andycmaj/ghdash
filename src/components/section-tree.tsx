@@ -149,8 +149,12 @@ export function SectionTree() {
             </text>
           }
         >
-          <text fg={headerFg()} attributes={headerSelected() ? 1 : 0}>
-            {truncate(state.pr!.title, 36)}
+          <text
+            fg={headerFg()}
+            attributes={headerSelected() ? 1 : 0}
+            wrapMode="word"
+          >
+            {state.pr!.title}
           </text>
           <text fg={headerSelected() ? headerFg() : theme.textMuted}>
             {truncate(`${state.pr!.headRef} → ${state.pr!.baseRef}`, 36)}
@@ -196,7 +200,7 @@ export function SectionTree() {
         </For>
       </box>
 
-      {/* Connection/poll status at bottom of sidebar */}
+      {/* Connection status at bottom of sidebar */}
       <ConnectionStatus narrow={true} />
     </box>
   );

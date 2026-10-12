@@ -4,8 +4,9 @@ A terminal UI that shows an interactive status dashboard for **the current git
 worktree's open PR** on GitHub — the PR feed (comments + reviews + review
 threads), Actions/workflow status (with annotations), and merge blockers.
 
-Built with [`@opentui/solid`](https://github.com/anomalyco/opentui). Layout,
-styling, and interaction model are adapted from `tilt-tui`.
+Built with [`@opentui/solid`](https://github.com/anomalyco/opentui).
+
+<img width="2558" height="1444" alt="CAP 2026-10-12 at 16 39 05@2x" src="https://github.com/user-attachments/assets/1103cf11-ccea-4def-91a1-fff9a7063288" />
 
 ## Requirements
 

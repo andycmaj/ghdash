@@ -21,3 +21,8 @@ not the PR at large
 - re-open (if closed)
 - ready (if draft)
 - draft (if ready)
+
+### Feed improvements
+
+- add filters for bots/humans/feed events/all (checkboxes? toggle though all?)
+- copy link on ANY card shoudl copy the link for that item

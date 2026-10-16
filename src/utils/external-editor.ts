@@ -46,7 +46,7 @@ export function stripTemplate(contents: string): string {
   return (cut === -1 ? contents : contents.slice(0, cut)).trim();
 }
 
-function shellQuote(s: string): string {
+export function shellQuote(s: string): string {
   return `'${s.replaceAll("'", `'\\''`)}'`;
 }
 

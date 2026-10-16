@@ -24,11 +24,12 @@
     "lint:fix": "oxlint --fix"
   },
   "dependencies": {
-    "@andycmaj/opentui-app": "^0.1.0",
+    "@andycmaj/opentui-app": "0.3.0",
     "@opentui/core": "0.5.12",
     "@opentui/solid": "0.5.12",
     "citty": "^0.2.2",
     "effection": "4.0.2",
+    "ghostty-opentui": "1.5.0",
     "marked": "^17.0.1",
     "octokit": "^4.0.2",
     "solid-js": "1.9.12"

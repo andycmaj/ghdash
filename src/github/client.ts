@@ -245,6 +245,13 @@ mutation ReplyToThread($threadId: ID!, $body: String!) {
   }
 }`;
 
+const ADD_COMMENT_MUTATION = `
+mutation AddComment($subjectId: ID!, $body: String!) {
+  addComment(input: { subjectId: $subjectId, body: $body }) {
+    commentEdge { node { id } }
+  }
+}`;
+
 interface GqlActor {
   login?: string;
   __typename?: string;
@@ -379,6 +386,25 @@ export class GithubClient {
   async replyToThread(threadId: string, body: string): Promise<void> {
     const octokit = await this.getOctokit();
     await octokit.graphql(REPLY_TO_THREAD_MUTATION, { threadId, body });
+  }
+
+  async addComment(prNodeId: string, body: string): Promise<void> {
+    const octokit = await this.getOctokit();
+    await octokit.graphql(ADD_COMMENT_MUTATION, { subjectId: prNodeId, body });
+  }
+
+  // A job's plain-text log. GitHub answers with a redirect to a short-lived
+  // download URL, which fetch follows.
+  async getJobLog(owner: string, repo: string, jobId: number): Promise<string> {
+    const octokit = await this.getOctokit();
+    const { data } = await octokit.rest.actions.downloadJobLogsForWorkflowRun({
+      owner,
+      repo,
+      job_id: jobId,
+    });
+    if (typeof data === "string") return data;
+    if (data instanceof ArrayBuffer) return new TextDecoder().decode(data);
+    return String(data);
   }
 
   // The repo's labels, offered when editing a PR's labels. REST keeps this a

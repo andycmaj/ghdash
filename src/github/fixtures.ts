@@ -8,6 +8,7 @@ import {
   CheckStatus,
   FeedItemKind,
   MergeBlockerKind,
+  type CheckRun,
   type PRDashboard,
   type RepoContext,
 } from "./types";
@@ -92,6 +93,63 @@ const baseFeed: PRDashboard["feed"] = [
     threadLine: 12,
     threadResolved: false,
   },
+  {
+    id: "b1",
+    kind: FeedItemKind.Comment,
+    author: bot,
+    body: [
+      "### Coverage report",
+      "",
+      "| File | Stmts | Branch | Funcs |",
+      "| --- | --- | --- | --- |",
+      ...Array.from(
+        { length: 18 },
+        (_, i) => `| src/file-${i}.ts | 9${i % 10}% | 8${i % 10}% | 100% |`,
+      ),
+      "",
+      "Overall coverage **91.2%** (+0.4%).",
+    ].join("\n"),
+    createdAt: ago(30),
+    url: "https://github.com/x/4",
+  },
+  {
+    id: "t2",
+    kind: FeedItemKind.ThreadComment,
+    author: human,
+    body: "Good call — added a `merge-queue` fixture.",
+    createdAt: ago(25),
+    url: "https://github.com/x/5",
+    threadId: "th1",
+    threadPath: "src/github/fixtures.ts",
+    threadLine: 12,
+    threadResolved: false,
+    isReply: true,
+  },
+  {
+    id: "t3",
+    kind: FeedItemKind.ThreadComment,
+    author: reviewer,
+    body: "Nit: this could be a `const`.",
+    createdAt: ago(20),
+    url: "https://github.com/x/6",
+    threadId: "th2",
+    threadPath: "src/index.tsx",
+    threadLine: 4,
+    threadResolved: true,
+  },
+  {
+    id: "t4",
+    kind: FeedItemKind.ThreadComment,
+    author: human,
+    body: "Done.",
+    createdAt: ago(18),
+    url: "https://github.com/x/7",
+    threadId: "th2",
+    threadPath: "src/index.tsx",
+    threadLine: 4,
+    threadResolved: true,
+    isReply: true,
+  },
 ];
 
 const baseThreads: PRDashboard["reviewThreads"] = [
@@ -100,7 +158,14 @@ const baseThreads: PRDashboard["reviewThreads"] = [
     path: "src/github/fixtures.ts",
     line: 12,
     isResolved: false,
-    comments: [baseFeed[2]],
+    comments: [baseFeed[2], baseFeed[4]],
+  },
+  {
+    id: "th2",
+    path: "src/index.tsx",
+    line: 4,
+    isResolved: true,
+    comments: [baseFeed[5], baseFeed[6]],
   },
 ];
 
@@ -386,4 +451,21 @@ export async function loadFixture(value: string): Promise<Fixture> {
     );
   }
   return fixture;
+}
+
+// A plausible Actions log for a fixture job, in GitHub's raw format.
+export function fixtureJobLog(check: CheckRun): string {
+  const t = (s: number) => new Date(now - (600 - s) * 1000).toISOString();
+  return [
+    `${t(0)} ##[group]Run actions/checkout@v4`,
+    `${t(1)} Syncing repository: ${baseRepo.owner}/${baseRepo.repo}`,
+    `${t(2)} ##[endgroup]`,
+    `${t(3)} ##[group]Run bun run ${check.name}`,
+    `${t(4)} $ bun run ${check.name}`,
+    ...Array.from({ length: 40 }, (_, i) => `${t(5 + i)} step ${i + 1} ok`),
+    check.status === CheckStatus.Failure
+      ? `${t(50)} ##[error]Process completed with exit code 1.`
+      : `${t(50)} Done.`,
+    `${t(51)} ##[endgroup]`,
+  ].join("\n");
 }

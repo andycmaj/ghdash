@@ -1,4 +1,6 @@
-// Feed view: a card per comment / review event in the PR conversation.
+// Feed view: a card per comment / review event in the PR conversation, with
+// review-thread replies indented under their root. Rows come pre-built from
+// feed-model so navigation and rendering agree on what is visible.
 
 import { For, Show } from "solid-js";
 import { useGithub } from "@/context/github";
@@ -8,20 +10,28 @@ import { Card } from "@/components/card";
 import { Markdown } from "@/components/markdown/markdown";
 import { FeedItemKind, type FeedItem } from "@/github/types";
 import type { SectionProps } from "./common";
+import { collapseBody, FeedFilter, type FeedNode } from "./feed-model";
 
-export function FeedSection(props: SectionProps) {
+export function FeedSection(
+  props: SectionProps & { nodes: () => FeedNode[]; filter: () => FeedFilter },
+) {
   const { state } = useGithub();
   const theme = useTheme();
 
+  const emptyText = () =>
+    state.feed.length === 0
+      ? "No comments or reviews yet."
+      : `Nothing matches the "${props.filter()}" filter (f to change).`;
+
   return (
     <Show
-      when={state.feed.length > 0}
-      fallback={<text fg={theme.textMuted}>No comments or reviews yet.</text>}
+      when={props.nodes().length > 0}
+      fallback={<text fg={theme.textMuted}>{emptyText()}</text>}
     >
-      <For each={state.feed}>
-        {(item, index) => (
+      <For each={props.nodes()}>
+        {(node, index) => (
           <FeedRow
-            item={item}
+            node={node}
             width={props.width}
             id={props.idFor(index())}
             selected={props.selected() === index()}
@@ -30,6 +40,10 @@ export function FeedSection(props: SectionProps) {
       </For>
     </Show>
   );
+}
+
+export function feedFilterLabel(filter: FeedFilter): string | null {
+  return filter === FeedFilter.All ? null : filter;
 }
 
 function reviewStateLabel(item: FeedItem): { text: string; color: string } {
@@ -47,13 +61,14 @@ function reviewStateLabel(item: FeedItem): { text: string; color: string } {
 }
 
 function FeedRow(props: {
-  item: FeedItem;
+  node: FeedNode;
   width: number;
   id: string;
   selected: boolean;
 }) {
   const theme = useTheme();
-  const item = props.item;
+  const item = props.node.item;
+  const isReply = props.node.depth > 0;
 
   const kindGlyph = () => {
     if (item.kind === FeedItemKind.Review) return "★";
@@ -94,32 +109,57 @@ function FeedRow(props: {
           {reviewStateLabel(item).text}
         </text>
       </Show>
-      <Show when={isThread && item.threadPath}>
+      <Show when={isThread && !isReply && item.threadPath}>
         <text fg={theme.textMuted}> {item.threadPath}</text>
       </Show>
-      <Show when={isThread}>
+      <Show when={isThread && !isReply}>
         <text fg={threadStatus().color}> {threadStatus().text}</text>
       </Show>
       <text fg={theme.textMuted}> · {formatRelativeTime(item.createdAt)}</text>
     </>
   );
 
-  // Card border + padding eats ~4 columns.
-  const bodyWidth = () => Math.max(10, props.width - 4);
+  // Card border + padding (~4 columns) plus the reply indent.
+  const indent = () => props.node.depth * 4;
+  const bodyWidth = () => Math.max(10, props.width - 4 - indent());
+
+  const collapsed = () =>
+    props.node.collapsed ? collapseBody(item.body, bodyWidth()) : null;
+  const visibleBody = () => collapsed()?.text ?? item.body;
+
+  // What a collapsed card is hiding, e.g. "▸ 3 replies · 20 more lines".
+  const foldHint = () => {
+    if (!props.node.collapsed) return null;
+    const parts: string[] = [];
+    const replies = props.node.replyCount;
+    if (replies > 0)
+      parts.push(`${replies} ${replies === 1 ? "reply" : "replies"}`);
+    const hidden = collapsed()?.hiddenLines ?? 0;
+    if (hidden > 0) parts.push(`${hidden} more lines`);
+    return parts.length ? `▸ ${parts.join(" · ")}` : null;
+  };
 
   return (
-    <Card
-      id={props.id}
-      selected={props.selected}
-      accent={accent()}
-      header={header}
-    >
-      <Show
-        when={item.body.trim()}
-        fallback={<text fg={theme.textMuted}>(no description)</text>}
+    <box paddingLeft={indent()}>
+      <Card
+        id={props.id}
+        selected={props.selected}
+        accent={accent()}
+        header={header}
       >
-        <Markdown text={item.body} width={bodyWidth()} />
-      </Show>
-    </Card>
+        <Show
+          when={item.body.trim()}
+          fallback={<text fg={theme.textMuted}>(no description)</text>}
+        >
+          <Markdown text={visibleBody()} width={bodyWidth()} />
+        </Show>
+        <Show when={foldHint()}>
+          <text fg={theme.textMuted}>
+            {foldHint()}
+            {props.selected ? " (enter to expand)" : ""}
+          </text>
+        </Show>
+      </Card>
+    </box>
   );
 }

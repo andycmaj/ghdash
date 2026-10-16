@@ -1,4 +1,5 @@
-// Reply-to-review-thread flow. Composes in $EDITOR when possible and falls back
+// Reply flow for feed items: review-thread comments are answered in-thread,
+// top-level comments and reviews get a quote-reply PR comment. Composes in $EDITOR when possible and falls back
 // to the in-app ReplyModal. The target is captured when the reply starts so a
 // poll reshuffling the feed can't retarget an in-progress reply.
 
@@ -14,7 +15,10 @@ import { useGithub } from "./github";
 import { useFocus } from "./focus";
 import { useToast } from "./toast";
 import { editInExternalEditor } from "@/utils/external-editor";
-import { FeedItemKind, type FeedItem } from "@/github/types";
+import type { FeedItem } from "@/github/types";
+import { canReply, isThreadReply, quoteReplyBody } from "@/github/feed-utils";
+
+export { canReply };
 
 interface ReplyContextValue {
   target: Accessor<FeedItem | null>;
@@ -28,16 +32,15 @@ interface ReplyContextValue {
 
 const ReplyContext = createContext<ReplyContextValue>();
 
-export function canReply(item: FeedItem | undefined): boolean {
-  return item?.kind === FeedItemKind.ThreadComment && !!item.threadId;
-}
-
 function editorContext(item: FeedItem): string[] {
   const where = item.threadPath
     ? ` on ${item.threadPath}${item.threadLine != null ? `:${item.threadLine}` : ""}`
     : "";
+  const how = isThreadReply(item)
+    ? "in the review thread"
+    : "as a new PR comment quoting the original";
   return [
-    `Replying to @${item.author.login}${where}`,
+    `Replying to @${item.author.login}${where} ${how}`,
     "",
     ...item.body.split("\n").map((l) => `> ${l}`),
   ];
@@ -45,7 +48,7 @@ function editorContext(item: FeedItem): string[] {
 
 export function ReplyProvider(props: ParentProps) {
   const renderer = useRenderer();
-  const { replyToThread } = useGithub();
+  const { replyToThread, addPrComment } = useGithub();
   const { openModal, closeModal } = useFocus();
   const { showToast } = useToast();
 
@@ -56,7 +59,8 @@ export function ReplyProvider(props: ParentProps) {
   async function send(body: string) {
     const item = target();
     if (!item) return;
-    await replyToThread(item, body);
+    if (isThreadReply(item)) await replyToThread(item, body);
+    else await addPrComment(quoteReplyBody(item, body));
     showToast("Reply posted");
   }
 

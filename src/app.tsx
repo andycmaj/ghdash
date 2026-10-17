@@ -16,6 +16,8 @@ import { keymap } from "./keymap";
 import { ConnectionStatus } from "./components/connection-status";
 import { SectionTree } from "./components/section-tree";
 import { SectionView } from "./components/section-view";
+import { TerminalPane } from "./components/terminal-pane";
+import { TerminalProvider, useTerminal } from "./context/terminal";
 import { SectionPicker } from "./components/section-picker";
 import {
   CommandPalette,
@@ -52,6 +54,7 @@ function AppContent() {
   const { state, refresh, togglePrDraft } = useGithub();
   const { showToast } = useToast();
   const theme = useTheme();
+  const terminal = useTerminal();
 
   // Surface background fetch/API failures (e.g. GitHub rate-limit throttling) as
   // an error toast. state.error is otherwise only visible as a red status dot and
@@ -139,7 +142,7 @@ function AppContent() {
       [Commands.HELP_OPEN]: () => openModal("help"),
       [Commands.SECTION_PICKER_OPEN]: () => openModal("sectionPicker"),
       [Commands.OPEN_PR_LIST]: () => openModal("openPr"),
-      [Commands.COPY_PR_LINK]: copyPrLink,
+      [Commands.COPY_LINK]: copyPrLink,
       [Commands.PR_REFRESH]: () => {
         refresh();
         showToast("Refreshing…", 1500);
@@ -173,7 +176,9 @@ function AppContent() {
         <Show when={sidebarVisible()}>
           <SectionTree />
         </Show>
-        <SectionView />
+        <Show when={terminal.state()} fallback={<SectionView />}>
+          <TerminalPane />
+        </Show>
       </box>
 
       {/* Command Palette overlay */}
@@ -249,10 +254,12 @@ export function App(props: AppProps) {
           <ToastProvider>
             <KeymapProvider keymap={keymap}>
               <HelpContextProvider>
-                <ReplyProvider>
-                  <AppContent />
-                  <Toast />
-                </ReplyProvider>
+                <TerminalProvider>
+                  <ReplyProvider>
+                    <AppContent />
+                    <Toast />
+                  </ReplyProvider>
+                </TerminalProvider>
               </HelpContextProvider>
             </KeymapProvider>
           </ToastProvider>

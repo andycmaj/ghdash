@@ -168,6 +168,13 @@ export function workflowExpandedByDefault(status: CheckStatus): boolean {
   );
 }
 
+// The Actions job id in a check's details URL (…/actions/runs/<run>/job/<id>),
+// or null for checks that aren't Actions jobs (e.g. third-party apps).
+export function actionsJobId(url: string): number | null {
+  const match = url.match(/\/actions\/runs\/\d+\/job(?:s)?\/(\d+)/);
+  return match ? Number(match[1]) : null;
+}
+
 // The run URL for a workflow is a job's details URL without the /job/<id> tail.
 function workflowRunUrl(job: CheckRun): string | undefined {
   if (!job.url) return undefined;

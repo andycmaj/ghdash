@@ -1,6 +1,7 @@
 // Reply flow for feed items: review-thread comments are answered in-thread,
-// top-level comments and reviews get a quote-reply PR comment. Composes in $EDITOR when possible and falls back
-// to the in-app ReplyModal. The target is captured when the reply starts so a
+// top-level comments and reviews get a quote-reply PR comment. Composes in
+// $EDITOR in the embedded terminal when possible and falls back to the in-app
+// ReplyModal. The target is captured when the reply starts so a
 // poll reshuffling the feed can't retarget an in-progress reply.
 
 import {
@@ -10,11 +11,11 @@ import {
   type Accessor,
   type ParentProps,
 } from "solid-js";
-import { useRenderer } from "@opentui/solid";
 import { useGithub } from "./github";
 import { useFocus } from "./focus";
 import { useToast } from "./toast";
-import { editInExternalEditor } from "@/utils/external-editor";
+import { useTerminal } from "./terminal";
+import { editInTerminal } from "@/utils/external-editor";
 import type { FeedItem } from "@/github/types";
 import { canReply, isThreadReply, quoteReplyBody } from "@/github/feed-utils";
 
@@ -47,7 +48,7 @@ function editorContext(item: FeedItem): string[] {
 }
 
 export function ReplyProvider(props: ParentProps) {
-  const renderer = useRenderer();
+  const terminal = useTerminal();
   const { replyToThread, addPrComment } = useGithub();
   const { openModal, closeModal } = useFocus();
   const { showToast } = useToast();
@@ -69,7 +70,7 @@ export function ReplyProvider(props: ParentProps) {
     setTarget(item);
     editing = true;
     try {
-      const result = await editInExternalEditor(renderer, {
+      const result = await editInTerminal(terminal.open, {
         context: editorContext(item),
         title: `Reply to @${item.author.login}`,
       });

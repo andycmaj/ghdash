@@ -1,6 +1,6 @@
 {
   "name": "@andycmaj/ghdash",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "GitHub PR status dashboard TUI built with OpenTUI Solid",
   "type": "module",
   "private": true,

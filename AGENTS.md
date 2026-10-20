@@ -48,6 +48,11 @@ layer, so keys only ever reach one handler.
 - Views: left pane `components/section-tree.tsx` (Feed / Actions / Merge queue
   (only while queued) / Mergeability),
   right pane `components/section-view.tsx` (the selected section's content).
+  Feed rows (thread grouping, filter, collapse) come from
+  `components/sections/feed-model.ts`.
+- Embedded terminal: `src/terminal/` + `context/terminal.tsx` +
+  `components/terminal-pane.tsx` (ported from kube-tui, ghostty-opentui PTY).
+  Replaces the content pane while open; used to view job logs in `$EDITOR`.
 
 ## Testing the TUI
 

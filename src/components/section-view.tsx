@@ -33,7 +33,15 @@ import { MainFooter } from "./main-footer";
 import { openUrl } from "@/utils/open-url";
 import { SectionKey } from "@/github/types";
 import { PrInfo } from "./pr-info";
-import { FeedSection } from "./sections/feed-section";
+import { FeedSection, feedFilterLabel } from "./sections/feed-section";
+import {
+  buildFeedNodes,
+  FeedFilter,
+  nextFeedFilter,
+  type FeedNode,
+} from "./sections/feed-model";
+import { copyToClipboard } from "@/utils/copy-to-clipboard";
+import { useJobLogs } from "@/hooks/useJobLogs";
 import {
   ActionsSection,
   buildActionsNodes,
@@ -57,6 +65,7 @@ export function SectionView() {
   const { showToast } = useToast();
   const { setSelectedItem } = useHelpContext();
   const { startReply } = useReply();
+  const openJobLogs = useJobLogs();
   const theme = useTheme();
   const dimensions = useTerminalDimensions();
 
@@ -73,6 +82,13 @@ export function SectionView() {
   const isExpanded = (key: string, defaultOpen: boolean) =>
     expanded[key] ?? defaultOpen;
 
+  // Feed filter (cycled by `f`) and per-card expand/collapse overrides; absent
+  // an override a card follows its default (see buildFeedNodes).
+  const [feedFilter, setFeedFilter] = createSignal<FeedFilter>(FeedFilter.All);
+  const [feedExpanded, setFeedExpanded] = createStore<Record<string, boolean>>(
+    {},
+  );
+
   // Whether job annotations are rendered under the Actions tree (toggled by `a`).
   const [showAnnotations, setShowAnnotations] = createSignal(true);
 
@@ -83,6 +99,15 @@ export function SectionView() {
   });
 
   const viewportHeight = createMemo(() => scrollRef?.viewport.height ?? 20);
+
+  // Visible feed rows: threads grouped, filter applied, folded cards honoured.
+  // Overrides are stored as "collapsed?" so a missing key means "default".
+  const feedNodes = createMemo<FeedNode[]>(() =>
+    buildFeedNodes(state.feed, feedFilter(), bodyWidth() - 4, (id) => {
+      const v = feedExpanded[id];
+      return v === undefined ? undefined : !v;
+    }),
+  );
 
   // Flattened Actions tree: workflow rows, each followed by its jobs when open.
   const actionsNodes = createMemo<ActionsNode[]>(() =>
@@ -123,7 +148,7 @@ export function SectionView() {
         // One entry per card; `o` opens the PR itself.
         return state.pr ? INFO_CARDS.map(() => undefined) : [];
       case SectionKey.Feed:
-        return state.feed.map((f) => f.url);
+        return feedNodes().map((n) => n.item.url);
       case SectionKey.Actions:
         return actionsNodes().map(nodeUrl);
       case SectionKey.MergeQueue:
@@ -165,8 +190,10 @@ export function SectionView() {
         return state.pr && card ? { kind: "infoCard", card } : null;
       }
       case SectionKey.Feed: {
-        const item = state.feed[index];
-        return item ? { kind: "feedItem", item } : null;
+        const node = feedNodes()[index];
+        return node
+          ? { kind: "feedItem", item: node.item, collapsible: node.collapsible }
+          : null;
       }
       case SectionKey.MergeQueue:
       case SectionKey.Actions: {
@@ -224,6 +251,9 @@ export function SectionView() {
       [Commands.CARD_EDIT]: () => editCurrentCard(),
       [Commands.FEED_REPLY]: () => replyToSelected(),
       [Commands.TOGGLE_ANNOTATIONS]: () => setShowAnnotations((v) => !v),
+      [Commands.FEED_FILTER]: () => cycleFeedFilter(),
+      [Commands.COPY_LINK]: () => copySelectedLink(),
+      [Commands.OPEN_JOB_LOGS]: () => openSelectedJobLogs(),
     },
     { target: pane.target },
   );
@@ -233,6 +263,16 @@ export function SectionView() {
   function activate() {
     if (state.selectedSection === SectionKey.Info) {
       editCurrentCard();
+      return;
+    }
+    if (state.selectedSection === SectionKey.Feed) {
+      const node = feedNodes()[cursor()];
+      if (node?.collapsible) {
+        setFeedExpanded(node.item.id, node.collapsed);
+        // Wait for the re-render so the scroll sees the card's new height.
+        const id = childId(cursor());
+        setTimeout(() => scrollRef?.scrollChildIntoView(id), 0);
+      }
       return;
     }
     const node = treeNodes()[cursor() - treeOffset()];
@@ -268,8 +308,55 @@ export function SectionView() {
 
   function replyToSelected() {
     if (state.selectedSection !== SectionKey.Feed) return;
-    const item = state.feed[cursor()];
-    if (item && canReply(item)) startReply(item);
+    const item = feedNodes()[cursor()]?.item;
+    if (item && canReply(item)) void startReply(item);
+  }
+
+  function cycleFeedFilter() {
+    if (state.selectedSection !== SectionKey.Feed) return;
+    const next = nextFeedFilter(feedFilter());
+    setFeedFilter(next);
+    setCursor(0);
+    scrollRef?.scrollTo(0);
+    showToast(`Feed: ${next}`, 1200);
+  }
+
+  // The most specific link for the item under the cursor, falling back to the
+  // PR itself (e.g. PR Info cards, merge blockers).
+  function copySelectedLink() {
+    const item = selectedItem();
+    const url = itemUrls()[cursor()] ?? state.pr?.url;
+    if (!url) {
+      showToast("No PR loaded");
+      return;
+    }
+    const what = !itemUrls()[cursor()]
+      ? "PR"
+      : item?.kind === "feedItem"
+        ? "Comment"
+        : item?.kind === "job"
+          ? "Job"
+          : item?.kind === "workflow"
+            ? "Workflow run"
+            : item?.kind === "queueEntry"
+              ? "PR"
+              : "Item";
+    void copyToClipboard(url).then((ok) =>
+      showToast(
+        ok ? `${what} link copied` : "Could not copy link",
+        2000,
+        ok ? undefined : "error",
+      ),
+    );
+  }
+
+  function openSelectedJobLogs() {
+    const item = selectedItem();
+    if (item?.kind !== "job") {
+      showToast("Select a job to open its logs");
+      return;
+    }
+    void openJobLogs(item.check);
   }
 
   function pageStep(): number {
@@ -280,8 +367,10 @@ export function SectionView() {
     switch (state.selectedSection) {
       case SectionKey.Info:
         return "PR Info";
-      case SectionKey.Feed:
-        return "Feed";
+      case SectionKey.Feed: {
+        const label = feedFilterLabel(feedFilter());
+        return label ? `Feed · ${label}` : "Feed";
+      }
       case SectionKey.Actions:
         return "Actions";
       case SectionKey.MergeQueue:
@@ -329,6 +418,8 @@ export function SectionView() {
               width={bodyWidth()}
               selected={activeCursor}
               idFor={childId}
+              nodes={feedNodes}
+              filter={feedFilter}
             />
           </Match>
           <Match when={state.selectedSection === SectionKey.Actions}>

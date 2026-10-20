@@ -21,9 +21,11 @@ import {
 } from "effection";
 import { GithubClient } from "../github/client";
 import { getRepoContext } from "../github/repo-context";
-import { loadFixture } from "../github/fixtures";
+import { fixtureJobLog, loadFixture } from "../github/fixtures";
+import { actionsJobId } from "../github/status-utils";
 import type { PRSpec } from "../github/pr-spec";
 import {
+  FeedItemKind,
   MergeBlockerKind,
   PRStatus,
   SectionKey,
@@ -73,6 +75,9 @@ interface GithubContextValue {
   togglingDraft: Accessor<boolean>;
   togglePrDraft: () => Promise<boolean | undefined>;
   replyToThread: (item: FeedItem, body: string) => Promise<void>;
+  addPrComment: (body: string) => Promise<void>;
+  // Raw text log of an Actions job, by its details URL.
+  getJobLog: (check: CheckRun) => Promise<string>;
   // PR switching
   listMyOpenPrs: () => Promise<PrListItem[]>;
   openPr: (item: PrListItem) => void;
@@ -412,6 +417,37 @@ export function GithubProvider(props: ParentProps<GithubProviderProps>) {
     refresh();
   }
 
+  async function addPrComment(body: string) {
+    const pr = state.pr;
+    if (!pr) throw new Error("No PR loaded");
+    if (fixtureMode()) {
+      setState("feed", (feed) => [
+        ...feed,
+        {
+          id: `fixture-comment-${Date.now()}`,
+          kind: FeedItemKind.Comment,
+          author: { login: "you", isBot: false },
+          body,
+          createdAt: new Date().toISOString(),
+          url: `${pr.url}#issuecomment-fixture`,
+        },
+      ]);
+      return;
+    }
+    await client.addComment(pr.nodeId, body);
+    refresh();
+  }
+
+  async function getJobLog(check: CheckRun): Promise<string> {
+    if (fixtureMode()) return fixtureJobLog(check);
+    const repo = state.repo;
+    const jobId = check.url ? actionsJobId(check.url) : null;
+    if (!repo || jobId == null) {
+      throw new Error(`No Actions log for ${check.name}`);
+    }
+    return client.getJobLog(repo.owner, repo.repo, jobId);
+  }
+
   // The current user's open PRs, offered by the PR picker. In fixture mode
   // there's no network, so surface the single canned PR as the only choice.
   async function listMyOpenPrs(): Promise<PrListItem[]> {
@@ -470,6 +506,8 @@ export function GithubProvider(props: ParentProps<GithubProviderProps>) {
     togglingDraft,
     togglePrDraft,
     replyToThread,
+    addPrComment,
+    getJobLog,
     listMyOpenPrs,
     openPr,
   };

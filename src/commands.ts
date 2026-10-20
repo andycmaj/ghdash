@@ -9,7 +9,7 @@ export const Commands = {
   OPEN_IN_BROWSER: "pr.open.browser",
   OPEN_LOKI_LOGS: "pr.open.loki",
   OPEN_PR_LIST: "pr.open.list",
-  COPY_PR_LINK: "pr.copy.link",
+  COPY_LINK: "copy.link",
   MERGE_PR: "pr.merge",
   TOGGLE_DRAFT: "pr.toggle.draft",
 
@@ -34,8 +34,16 @@ export const Commands = {
   // Edit the active card (PR Info: title / description / labels)
   CARD_EDIT: "content.card.edit",
 
-  // Reply to the selected review-thread comment in the Feed
+  // Reply to the selected comment in the Feed
   FEED_REPLY: "content.feed.reply",
+  // Cycle the Feed's author/kind filter
+  FEED_FILTER: "content.feed.filter",
+
+  // Open the selected Actions job's raw log in $EDITOR
+  OPEN_JOB_LOGS: "content.job.logs",
+
+  // Embedded terminal (job logs)
+  TERMINAL_DETACH: "terminal.detach",
 
   // Command palette
   PALETTE_OPEN: "palette.open",

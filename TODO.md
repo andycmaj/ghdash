@@ -5,15 +5,7 @@
   - neovim
   - what else?
 
-### open actions run logs
-
-- open raw logs in EDITOR
-
 ### show how many comments are on the PR in actions line in left pane
-
-### "copy link" command on an ACtion run card shoudl copy link for that run
-
-not the PR at large
 
 ### PR action commands
 
@@ -22,7 +14,6 @@ not the PR at large
 - ready (if draft)
 - draft (if ready)
 
-### Feed improvements
+### add Run summaries to actions view
 
-- add filters for bots/humans/feed events/all (checkboxes? toggle though all?)
-- copy link on ANY card shoudl copy the link for that item
+grab the run summary markdown and add a command (when a run is selected) to open summary

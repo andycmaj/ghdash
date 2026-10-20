@@ -25,7 +25,7 @@ export type InfoCard = "title" | "body" | "labels" | "status";
 // The item under the content-pane cursor.
 export type SelectedItem =
   | { kind: "infoCard"; card: InfoCard }
-  | { kind: "feedItem"; item: FeedItem }
+  | { kind: "feedItem"; item: FeedItem; collapsible: boolean }
   | { kind: "workflow"; group: WorkflowGroup; expanded: boolean }
   | { kind: "job"; check: CheckRun }
   | { kind: "blocker"; blocker: MergeBlocker }

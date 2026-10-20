@@ -1,5 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import {
+  actionsJobId,
   aggregateStatus,
   canMerge,
   computeMergeBlockers,
@@ -295,5 +296,20 @@ describe("computeMergeBlockers", () => {
     );
     const behind = blockers.find((b) => b.kind === MergeBlockerKind.BehindBase);
     expect(behind?.satisfied).toBe(false);
+  });
+});
+
+describe("actionsJobId", () => {
+  test("parses the job id from an Actions details URL", () => {
+    expect(actionsJobId("https://github.com/o/r/actions/runs/1/job/10")).toBe(
+      10,
+    );
+    expect(
+      actionsJobId("https://github.com/o/r/actions/runs/1/job/10?pr=3"),
+    ).toBe(10);
+  });
+  test("returns null for non-Actions checks", () => {
+    expect(actionsJobId("https://ci.example.com/build/5")).toBeNull();
+    expect(actionsJobId("https://github.com/o/r/actions/runs/1")).toBeNull();
   });
 });

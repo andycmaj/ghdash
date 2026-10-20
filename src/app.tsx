@@ -9,6 +9,10 @@ import { FocusProvider, useFocus } from "./context/focus";
 import { ToastProvider, useToast } from "./context/toast";
 import { HelpContextProvider } from "./context/help-context";
 import { ReplyProvider } from "./context/reply";
+import {
+  DescriptionEditProvider,
+  useDescriptionEdit,
+} from "./context/description-edit";
 import { ThemeProvider } from "./context/theme";
 import type { ThemeName } from "./theme/theme";
 import { Toast } from "./components/toast";
@@ -51,6 +55,7 @@ function AppContent() {
     activePaneTarget,
   } = useFocus();
   const keymap = useKeymap();
+  const descriptionEdit = useDescriptionEdit();
   const { state, refresh, togglePrDraft } = useGithub();
   const { showToast } = useToast();
   const theme = useTheme();
@@ -209,7 +214,11 @@ function AppContent() {
         <PrEditModal field="title" onClose={() => closeModal()} />
       </Show>
       <Show when={activeModal() === "editBody"}>
-        <PrEditModal field="body" onClose={() => closeModal()} />
+        <PrEditModal
+          field="body"
+          initial={descriptionEdit.draft()}
+          onClose={() => closeModal()}
+        />
       </Show>
       <Show when={activeModal() === "editLabels"}>
         <PrLabelsModal onClose={() => closeModal()} />
@@ -256,8 +265,10 @@ export function App(props: AppProps) {
               <HelpContextProvider>
                 <TerminalProvider>
                   <ReplyProvider>
-                    <AppContent />
-                    <Toast />
+                    <DescriptionEditProvider>
+                      <AppContent />
+                      <Toast />
+                    </DescriptionEditProvider>
                   </ReplyProvider>
                 </TerminalProvider>
               </HelpContextProvider>

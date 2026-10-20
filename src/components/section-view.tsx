@@ -19,6 +19,7 @@ import { useKeymap, usePane } from "@andycmaj/opentui-app";
 import { useFocus } from "../context/focus";
 import { useToast } from "../context/toast";
 import { canReply, useReply } from "../context/reply";
+import { useDescriptionEdit } from "../context/description-edit";
 import {
   useHelpContext,
   type InfoCard,
@@ -55,7 +56,7 @@ const SIDEBAR_WIDTH = 44;
 const nodeUrl = (n: ActionsNode): string | undefined =>
   n.kind === "workflow" ? n.group.url : n.check.url;
 
-const INFO_CARDS: InfoCard[] = ["title", "body", "labels", "status"];
+const INFO_CARDS: InfoCard[] = ["title", "branch", "body", "labels", "status"];
 
 export function SectionView() {
   const { state } = useGithub();
@@ -65,6 +66,7 @@ export function SectionView() {
   const { showToast } = useToast();
   const { setSelectedItem } = useHelpContext();
   const { startReply } = useReply();
+  const { startEdit: editDescription } = useDescriptionEdit();
   const openJobLogs = useJobLogs();
   const theme = useTheme();
   const dimensions = useTerminalDimensions();
@@ -283,21 +285,21 @@ export function SectionView() {
     }
   }
 
-  // Open the edit modal for the active PR Info card (0 title / 1 body / 2 labels),
-  // or flip draft/ready on the status card (3).
+  // Open the edit modal for the active PR Info card (0 title / 2 body / 3 labels),
+  // or flip draft/ready on the status card (4). The branch card (1) is read-only.
   function editCurrentCard() {
     if (state.selectedSection !== SectionKey.Info || !state.pr) return;
     switch (cursor()) {
       case 0:
         openModal("editTitle");
         break;
-      case 1:
-        openModal("editBody");
-        break;
       case 2:
-        openModal("editLabels");
+        void editDescription();
         break;
       case 3:
+        openModal("editLabels");
+        break;
+      case 4:
         // Same path as the app-level `d` binding, which owns the feedback toast.
         keymap.dispatchCommand(Commands.TOGGLE_DRAFT, {
           focused: pane.target(),

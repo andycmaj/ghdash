@@ -13,6 +13,8 @@ import { ModalCommands } from "@andycmaj/opentui-app";
 
 interface PrEditModalProps {
   field: "title" | "body";
+  // Overrides the PR's current value (e.g. text kept from a failed save).
+  initial?: string;
   onClose: () => void;
 }
 
@@ -25,7 +27,9 @@ export function PrEditModal(props: PrEditModalProps) {
   const [saving, setSaving] = createSignal(false);
 
   const isTitle = props.field === "title";
-  const initial = isTitle ? (state.pr?.title ?? "") : (state.pr?.body ?? "");
+  const initial =
+    props.initial ??
+    (isTitle ? (state.pr?.title ?? "") : (state.pr?.body ?? ""));
 
   let inputRef: InputRenderable | undefined;
   let textareaRef: TextareaRenderable | undefined;

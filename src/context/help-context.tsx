@@ -20,7 +20,7 @@ import type {
   SectionKey,
 } from "@/github/types";
 
-export type InfoCard = "title" | "body" | "labels" | "status";
+export type InfoCard = "title" | "branch" | "body" | "labels" | "status";
 
 // The item under the content-pane cursor.
 export type SelectedItem =

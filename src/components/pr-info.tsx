@@ -1,8 +1,8 @@
-// PR Info view: title, description and labels, each in its own card. The active
-// card shows an "(edit)" hint; pressing `e`/enter (handled by the content pane)
-// opens the matching edit modal (or flips draft/ready on the status card). Card
-// order matches the edit-target indices in section-view: 0 = title,
-// 1 = description, 2 = labels, 3 = status.
+// PR Info view: title, branch, description and labels, each in its own card.
+// The active card shows an "(edit)" hint; pressing `e`/enter (handled by the
+// content pane) opens the matching edit modal (or flips draft/ready on the
+// status card). Card order matches the edit-target indices in section-view:
+// 0 = title, 1 = branch (read-only), 2 = description, 3 = labels, 4 = status.
 
 import { For, Show, type JSX } from "solid-js";
 import { useGithub } from "@/context/github";
@@ -43,9 +43,20 @@ export function PrInfo(props: SectionProps) {
       </InfoCard>
 
       <InfoCard
-        title="Description"
+        title="Branch"
         id={props.idFor(1)}
         selected={props.selected() === 1}
+        hint={null}
+      >
+        <text fg={theme.text} wrapMode="word">
+          {`${state.pr!.headRef} → ${state.pr!.baseRef}`}
+        </text>
+      </InfoCard>
+
+      <InfoCard
+        title="Description"
+        id={props.idFor(2)}
+        selected={props.selected() === 2}
       >
         <Show
           when={state.pr!.body.trim()}
@@ -57,8 +68,8 @@ export function PrInfo(props: SectionProps) {
 
       <InfoCard
         title="Labels"
-        id={props.idFor(2)}
-        selected={props.selected() === 2}
+        id={props.idFor(3)}
+        selected={props.selected() === 3}
       >
         <Show
           when={state.pr!.labels.length > 0}
@@ -74,8 +85,8 @@ export function PrInfo(props: SectionProps) {
 
       <InfoCard
         title="Status"
-        id={props.idFor(3)}
-        selected={props.selected() === 3}
+        id={props.idFor(4)}
+        selected={props.selected() === 4}
         hint={statusHint()}
       >
         <Show

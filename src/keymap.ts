@@ -107,7 +107,9 @@ export const keymap: KeymapTable = {
       cmd: Commands.CARD_EDIT,
       desc: "edit",
       help: "edit",
-      relevant: (ctx) => ctx.selectedItem?.kind === "infoCard",
+      relevant: (ctx) =>
+        ctx.selectedItem?.kind === "infoCard" &&
+        ctx.selectedItem.card !== "branch",
     },
     {
       key: "c",

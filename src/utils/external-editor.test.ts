@@ -16,4 +16,9 @@ describe("editor template", () => {
   test("a deleted scissors line keeps the whole file", () => {
     expect(stripTemplate("  just text \n")).toBe("just text");
   });
+
+  test("pre-filled text round-trips above the guidance", () => {
+    const body = "# Summary\n\n- one\n- two";
+    expect(stripTemplate(buildTemplate([], body, ["Edit above"]))).toBe(body);
+  });
 });

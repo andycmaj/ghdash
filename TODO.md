@@ -17,3 +17,7 @@
 ### add Run summaries to actions view
 
 grab the run summary markdown and add a command (when a run is selected) to open summary
+
+### Live diff section
+
+- add a section where you can follow live diff / changes by agent

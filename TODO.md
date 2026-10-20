@@ -15,3 +15,5 @@
 - draft (if ready)
 
 ### add Run summaries to actions view
+
+grab the run summary markdown and add a command (when a run is selected) to open summary

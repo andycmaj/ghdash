@@ -264,24 +264,74 @@ function toAuthor(actor: GqlActor | null | undefined): Author {
   };
 }
 
+// GitHub asks us to wait `retryAfter` seconds. Short waits are retried inline
+// by the throttling plugin; longer ones fail fast so the poll loop can back off
+// (and stay responsive to manual refresh) instead of hanging a request for up
+// to an hour until the primary quota resets.
+const MAX_INLINE_RETRY_SEC = 60;
+const MAX_INLINE_RETRIES = 2;
+
 export interface GithubClientOptions {
   tokenOverride?: string;
+  // Called with the time requests may resume when GitHub throttles us, and
+  // with null once a request succeeds again.
+  onThrottleChange?: (until: Date | null) => void;
+  fetch?: typeof fetch;
 }
 
 export class GithubClient {
   private octokit: Octokit | null = null;
   private readonly tokenOverride?: string;
+  private readonly onThrottleChange?: (until: Date | null) => void;
+  private readonly fetchImpl?: typeof fetch;
+  private throttledUntilMs: number | null = null;
 
   constructor(options: GithubClientOptions = {}) {
     this.tokenOverride = options.tokenOverride;
+    this.onThrottleChange = options.onThrottleChange;
+    this.fetchImpl = options.fetch;
+  }
+
+  // When requests may resume, if GitHub is currently throttling us.
+  get throttledUntil(): Date | null {
+    if (this.throttledUntilMs == null || this.throttledUntilMs <= Date.now()) {
+      return null;
+    }
+    return new Date(this.throttledUntilMs);
   }
 
   private async getOctokit(): Promise<Octokit> {
     if (!this.octokit) {
       const auth = await resolveToken(this.tokenOverride);
-      this.octokit = new Octokit({ auth });
+      const onLimit = (
+        retryAfter: number,
+        _options: unknown,
+        _octokit: unknown,
+        retryCount: number,
+      ): boolean => {
+        this.setThrottledUntil(Date.now() + retryAfter * 1000);
+        return (
+          retryAfter <= MAX_INLINE_RETRY_SEC && retryCount < MAX_INLINE_RETRIES
+        );
+      };
+      const octokit = new Octokit({
+        auth,
+        request: this.fetchImpl ? { fetch: this.fetchImpl } : undefined,
+        throttle: {
+          onRateLimit: onLimit,
+          onSecondaryRateLimit: onLimit,
+        },
+      });
+      octokit.hook.after("request", () => this.setThrottledUntil(null));
+      this.octokit = octokit;
     }
     return this.octokit;
+  }
+
+  private setThrottledUntil(ms: number | null): void {
+    if (ms === this.throttledUntilMs) return;
+    this.throttledUntilMs = ms;
+    this.onThrottleChange?.(ms == null ? null : new Date(ms));
   }
 
   // Fetch the open PR for the current branch of a repo.

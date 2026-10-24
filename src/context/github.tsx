@@ -57,6 +57,8 @@ interface GithubState {
   mergeQueueChecks: CheckRun[];
   selectedSection: SectionKey;
   lastFetchedAt: string | null;
+  // When GitHub will let us make requests again, while we're being throttled.
+  throttledUntil: string | null;
   error: string | null;
 }
 
@@ -98,8 +100,6 @@ export interface GithubProviderProps {
 }
 
 export function GithubProvider(props: ParentProps<GithubProviderProps>) {
-  const client = new GithubClient({ tokenOverride: props.tokenOverride });
-
   const [state, setState] = createStore<GithubState>({
     connectionStatus: "connecting",
     repo: null,
@@ -112,7 +112,22 @@ export function GithubProvider(props: ParentProps<GithubProviderProps>) {
     mergeQueueChecks: [],
     selectedSection: SectionKey.Feed,
     lastFetchedAt: null,
+    throttledUntil: null,
     error: null,
+  });
+
+  const client = new GithubClient({
+    tokenOverride: props.tokenOverride,
+    onThrottleChange: (until) => {
+      batch(() => {
+        setState("throttledUntil", until?.toISOString() ?? null);
+        if (until) {
+          setState("connectionStatus", "throttled");
+        } else if (state.connectionStatus === "throttled") {
+          setState("connectionStatus", state.pr ? "connected" : "connecting");
+        }
+      });
+    },
   });
 
   // Effection signal used to wake the poll loop early for a manual refresh.
@@ -231,7 +246,10 @@ export function GithubProvider(props: ParentProps<GithubProviderProps>) {
     }
 
     while (true) {
-      if (state.connectionStatus !== "connected") {
+      if (
+        state.connectionStatus !== "connected" &&
+        state.connectionStatus !== "throttled"
+      ) {
         setState("connectionStatus", "connecting");
       }
 
@@ -239,6 +257,15 @@ export function GithubProvider(props: ParentProps<GithubProviderProps>) {
         const dashboard = yield* call(fetchForTarget(currentTarget!));
         applyDashboard(dashboard);
       } catch (err) {
+        // Polling again before the quota resets would only extend the limit, so
+        // hold off until then. The last good data stays on screen meanwhile.
+        const until = client.throttledUntil;
+        if (until) {
+          yield* waitNextTick(
+            Math.max(until.getTime() - Date.now(), ERROR_BACKOFF_MS),
+          );
+          continue;
+        }
         batch(() => {
           setState("connectionStatus", "disconnected");
           setState("error", errorMessage(err));

@@ -8,7 +8,6 @@ export type {
   ThemeColor,
   ThemeName,
   TerminalSurface,
-  ConnectionStatus,
 } from "@andycmaj/opentui-app";
 export {
   defaultTheme,
@@ -16,16 +15,43 @@ export {
   getModalTheme,
   resolveForeground,
   focusBorder,
-  connectionStatusIcon,
-  connectionStatusColor,
-  connectionStatusText,
   formatRelativeTime,
   formatDuration,
   formatBuildDuration,
 } from "@andycmaj/opentui-app";
 
-import type { Theme, ThemeColor } from "@andycmaj/opentui-app";
+import {
+  connectionStatusColor as baseConnectionStatusColor,
+  connectionStatusIcon as baseConnectionStatusIcon,
+  connectionStatusText as baseConnectionStatusText,
+  type ConnectionStatus as BaseConnectionStatus,
+  type Theme,
+  type ThemeColor,
+} from "@andycmaj/opentui-app";
 import { CheckStatus, PRStatus } from "@/github/types";
+
+// The framework's statuses plus "throttled": GitHub is rate limiting us and the
+// poll loop is backing off until the quota resets.
+export type ConnectionStatus = BaseConnectionStatus | "throttled";
+
+export function connectionStatusIcon(status: ConnectionStatus): string {
+  return status === "throttled" ? "◔" : baseConnectionStatusIcon(status);
+}
+
+export function connectionStatusColor(
+  theme: Theme,
+  status: ConnectionStatus,
+): ThemeColor {
+  return status === "throttled"
+    ? theme.warning
+    : baseConnectionStatusColor(theme, status);
+}
+
+export function connectionStatusText(status: ConnectionStatus): string {
+  return status === "throttled"
+    ? "Rate limited"
+    : baseConnectionStatusText(status);
+}
 
 // Color for a normalized check/workflow status.
 export function checkStatusColor(

@@ -1,10 +1,17 @@
-import { createMemo, Show } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  Show,
+} from "solid-js";
 import { useTerminalDimensions } from "@opentui/solid";
 import { useGithub } from "../context/github";
 import {
   connectionStatusIcon,
   connectionStatusColor,
   connectionStatusText,
+  formatDuration,
   prStatusColor,
 } from "../theme/theme";
 import { useTheme } from "@/hooks/useTheme";
@@ -37,11 +44,36 @@ export function ConnectionStatus(props: ConnectionStatusProps) {
     return `${icon} ${connectionStatusText(state.connectionStatus)}`;
   });
 
+  // Ticks only while throttled, to drive the countdown.
+  const [now, setNow] = createSignal(Date.now());
+  createEffect(() => {
+    if (!state.throttledUntil) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    onCleanup(() => clearInterval(timer));
+  });
+
+  const throttleText = createMemo(() => {
+    if (!state.throttledUntil) return "";
+    const remaining = new Date(state.throttledUntil).getTime() - now();
+    return remaining > 0
+      ? `rate limited · retry in ${formatDuration(remaining)}`
+      : "rate limited · retrying";
+  });
+
   const rightText = createMemo(() => {
+    if (state.throttledUntil) return throttleText();
     if (state.error) return "error";
 
     return "";
   });
+
+  const rightColor = () =>
+    state.throttledUntil
+      ? theme.warning
+      : state.error
+        ? theme.error
+        : theme.textMuted;
 
   const branchLine = () =>
     state.pr ? `${state.pr.headRef} → ${state.pr.baseRef}` : "";
@@ -63,8 +95,8 @@ export function ConnectionStatus(props: ConnectionStatusProps) {
         flexShrink={0}
         marginBottom={1}
       >
-        <Show when={state.error}>
-          <text fg={theme.error}>{rightText()}</text>
+        <Show when={state.throttledUntil || state.error}>
+          <text fg={rightColor()}>{rightText()}</text>
         </Show>
         <text fg={connectionColor()} attributes={1}>
           {statusLine()}
@@ -100,9 +132,7 @@ export function ConnectionStatus(props: ConnectionStatusProps) {
             </span>
           </text>
         </Show>
-        <text fg={state.error ? theme.error : theme.textMuted}>
-          {rightText() || branchLine()}
-        </text>
+        <text fg={rightColor()}>{rightText() || branchLine()}</text>
       </box>
     </box>
   );

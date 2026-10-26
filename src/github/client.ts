@@ -245,6 +245,20 @@ mutation ReplyToThread($threadId: ID!, $body: String!) {
   }
 }`;
 
+const RESOLVE_THREAD_MUTATION = `
+mutation ResolveThread($threadId: ID!) {
+  resolveReviewThread(input: { threadId: $threadId }) {
+    thread { id isResolved }
+  }
+}`;
+
+const UNRESOLVE_THREAD_MUTATION = `
+mutation UnresolveThread($threadId: ID!) {
+  unresolveReviewThread(input: { threadId: $threadId }) {
+    thread { id isResolved }
+  }
+}`;
+
 const ADD_COMMENT_MUTATION = `
 mutation AddComment($subjectId: ID!, $body: String!) {
   addComment(input: { subjectId: $subjectId, body: $body }) {
@@ -436,6 +450,14 @@ export class GithubClient {
   async replyToThread(threadId: string, body: string): Promise<void> {
     const octokit = await this.getOctokit();
     await octokit.graphql(REPLY_TO_THREAD_MUTATION, { threadId, body });
+  }
+
+  async setThreadResolved(threadId: string, resolved: boolean): Promise<void> {
+    const octokit = await this.getOctokit();
+    await octokit.graphql(
+      resolved ? RESOLVE_THREAD_MUTATION : UNRESOLVE_THREAD_MUTATION,
+      { threadId },
+    );
   }
 
   async addComment(prNodeId: string, body: string): Promise<void> {

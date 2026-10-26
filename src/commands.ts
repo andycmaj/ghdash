@@ -36,6 +36,8 @@ export const Commands = {
 
   // Reply to the selected comment in the Feed
   FEED_REPLY: "content.feed.reply",
+  // Resolve / unresolve the review thread of the selected Feed comment
+  FEED_RESOLVE: "content.feed.resolve",
   // Cycle the Feed's author/kind filter
   FEED_FILTER: "content.feed.filter",
 

@@ -42,6 +42,7 @@ import {
   type FeedNode,
 } from "./sections/feed-model";
 import { copyToClipboard } from "@/utils/copy-to-clipboard";
+import { canResolve } from "@/github/feed-utils";
 import { useJobLogs } from "@/hooks/useJobLogs";
 import {
   ActionsSection,
@@ -59,7 +60,7 @@ const nodeUrl = (n: ActionsNode): string | undefined =>
 const INFO_CARDS: InfoCard[] = ["title", "branch", "body", "labels", "status"];
 
 export function SectionView() {
-  const { state } = useGithub();
+  const { state, toggleThreadResolved } = useGithub();
   const keymap = useKeymap();
   const { openModal } = useFocus();
   const pane = usePane("content");
@@ -252,6 +253,7 @@ export function SectionView() {
       [Commands.TOGGLE_EXPAND]: () => activate(),
       [Commands.CARD_EDIT]: () => editCurrentCard(),
       [Commands.FEED_REPLY]: () => replyToSelected(),
+      [Commands.FEED_RESOLVE]: () => resolveSelected(),
       [Commands.TOGGLE_ANNOTATIONS]: () => setShowAnnotations((v) => !v),
       [Commands.FEED_FILTER]: () => cycleFeedFilter(),
       [Commands.COPY_LINK]: () => copySelectedLink(),
@@ -312,6 +314,29 @@ export function SectionView() {
     if (state.selectedSection !== SectionKey.Feed) return;
     const item = feedNodes()[cursor()]?.item;
     if (item && canReply(item)) void startReply(item);
+  }
+
+  function resolveSelected() {
+    if (state.selectedSection !== SectionKey.Feed) return;
+    const item = feedNodes()[cursor()]?.item;
+    if (!canResolve(item)) return;
+    toggleThreadResolved(item).then(
+      (resolved) => {
+        // Resolving folds the thread away, so a reply under the cursor would
+        // vanish; keep the cursor on the thread's root card.
+        const root = feedNodes().findIndex(
+          (n) => n.depth === 0 && n.item.threadId === item.threadId,
+        );
+        if (root >= 0) moveCursor(root);
+        showToast(resolved ? "Thread resolved" : "Thread unresolved", 2000);
+      },
+      (err: unknown) =>
+        showToast(
+          err instanceof Error ? err.message : String(err),
+          6000,
+          "error",
+        ),
+    );
   }
 
   function cycleFeedFilter() {

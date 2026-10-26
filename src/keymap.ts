@@ -1,7 +1,7 @@
 import { Commands } from "./commands";
 import type { KeymapTable } from "./keyboard/keymap-utils";
 import { SectionKey } from "./github/types";
-import { canReply } from "./github/feed-utils";
+import { canReply, canResolve } from "./github/feed-utils";
 
 // Declarative keymap configuration, by scope: "app" applies anywhere in the
 // pane layout; "sections" and "content" while focus is within that pane.
@@ -119,6 +119,15 @@ export const keymap: KeymapTable = {
       relevant: (ctx) =>
         ctx.selectedItem?.kind === "feedItem" &&
         canReply(ctx.selectedItem.item),
+    },
+    {
+      key: "x",
+      cmd: Commands.FEED_RESOLVE,
+      desc: "resolve/unresolve thread",
+      help: "resolve",
+      relevant: (ctx) =>
+        ctx.selectedItem?.kind === "feedItem" &&
+        canResolve(ctx.selectedItem.item),
     },
     {
       key: "f",

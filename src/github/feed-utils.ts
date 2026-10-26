@@ -12,6 +12,10 @@ export function canReply(item: FeedItem | undefined): boolean {
   return true;
 }
 
+export function canResolve(item: FeedItem | undefined): item is FeedItem {
+  return item?.kind === FeedItemKind.ThreadComment && !!item.threadId;
+}
+
 export function isThreadReply(item: FeedItem): boolean {
   return item.kind === FeedItemKind.ThreadComment && !!item.threadId;
 }

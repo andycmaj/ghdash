@@ -78,6 +78,8 @@ interface GithubContextValue {
   togglePrDraft: () => Promise<boolean | undefined>;
   replyToThread: (item: FeedItem, body: string) => Promise<void>;
   addPrComment: (body: string) => Promise<void>;
+  // Flip a review thread's resolved state. Resolves to the new state.
+  toggleThreadResolved: (item: FeedItem) => Promise<boolean>;
   // Raw text log of an Actions job, by its details URL.
   getJobLog: (check: CheckRun) => Promise<string>;
   // PR switching
@@ -444,6 +446,32 @@ export function GithubProvider(props: ParentProps<GithubProviderProps>) {
     refresh();
   }
 
+  async function toggleThreadResolved(item: FeedItem): Promise<boolean> {
+    const threadId = item.threadId;
+    if (!threadId) throw new Error("Not a review-thread comment");
+    const resolved = !item.threadResolved;
+    const apply = () =>
+      setState(
+        produce((s) => {
+          for (const f of s.feed)
+            if (f.threadId === threadId) f.threadResolved = resolved;
+          const thread = s.reviewThreads.find((t) => t.id === threadId);
+          if (!thread) return;
+          thread.isResolved = resolved;
+          for (const c of thread.comments) c.threadResolved = resolved;
+        }),
+      );
+    if (fixtureMode()) {
+      apply();
+      return resolved;
+    }
+    await client.setThreadResolved(threadId, resolved);
+    // Optimistic until the refresh lands, so the card and blockers update now.
+    apply();
+    refresh();
+    return resolved;
+  }
+
   async function addPrComment(body: string) {
     const pr = state.pr;
     if (!pr) throw new Error("No PR loaded");
@@ -534,6 +562,7 @@ export function GithubProvider(props: ParentProps<GithubProviderProps>) {
     togglePrDraft,
     replyToThread,
     addPrComment,
+    toggleThreadResolved,
     getJobLog,
     listMyOpenPrs,
     openPr,

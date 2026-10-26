@@ -4,6 +4,7 @@
 // either a built-in fixture name (see FIXTURES) or a path to a JSON file
 // holding `{ repo, dashboard }` (e.g. one captured from a live run).
 
+import { z } from "zod";
 import {
   CheckStatus,
   FeedItemKind,
@@ -433,6 +434,17 @@ export function fixtureNames(): string[] {
 
 // Resolve GHDASH_FIXTURE to a Fixture. A value ending in `.json` is read as a
 // file; anything else is looked up as a built-in name.
+// The dashboard is only checked shallowly: fixture files are dev data
+// captured from a live run, and mirroring all of PRDashboard as a schema would
+// duplicate types.ts for little benefit.
+const FixtureSchema = z.object({
+  repo: z.object({ owner: z.string(), repo: z.string(), branch: z.string() }),
+  dashboard: z.custom<PRDashboard>(
+    (v) => z.object({ pr: z.object({}) }).safeParse(v).success,
+    { message: "dashboard must be an object with a pr" },
+  ),
+});
+
 export async function loadFixture(value: string): Promise<Fixture> {
   const name = value.trim();
 
@@ -441,7 +453,13 @@ export async function loadFixture(value: string): Promise<Fixture> {
     if (!(await file.exists())) {
       throw new Error(`Fixture file not found: ${name}`);
     }
-    return (await file.json()) as Fixture;
+    const parsed = FixtureSchema.safeParse(await file.json());
+    if (!parsed.success) {
+      throw new Error(
+        `Invalid fixture file ${name}: ${z.prettifyError(parsed.error)}`,
+      );
+    }
+    return parsed.data;
   }
 
   const fixture = FIXTURES[name];

@@ -6,6 +6,17 @@
 
 - never use `any`. if you find you need to, try other methods, or pause and discuss
 - Don't use any browser-specific types or interfaces. node types only
+- Avoid type assertions (`as T`, `as unknown as T`, non-null `!`) whenever possible.
+  They silence the checker instead of proving the type, and oxlint flags them
+  (`no-unsafe-type-assertion`, `no-unnecessary-type-assertion`). Prefer, in order:
+  - let inference or control-flow narrowing do it (often the assertion is already unnecessary)
+  - tighten the source type (e.g. `os: "linux" | "darwin"` instead of `string`)
+  - `oneOf(VALUES, raw)` from `src/utils/guards.ts` to narrow a single string
+    (GraphQL enum, env var) to a union
+  - validate untrusted data (`JSON.parse`, `Bun.file().json()`, config files) with a
+    zod schema and derive the type via `z.infer`, rather than casting the result
+  - `as const` is fine; it's not a narrowing cast
+  - if an assertion is truly unavoidable, leave a comment saying why
 
 ## Typescript Style
 

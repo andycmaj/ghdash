@@ -2,30 +2,36 @@
 
 import { homedir } from "os";
 import { join } from "path";
+import { z } from "zod";
 import type { ThemeName } from "@/theme/theme";
 
-const THEME_NAMES: ThemeName[] = ["default", "terminal", "mono", "tokyo-night"];
+const THEME_NAMES = [
+  "default",
+  "terminal",
+  "mono",
+  "tokyo-night",
+] as const satisfies readonly ThemeName[];
 
-export function parseThemeName(value: unknown): ThemeName {
-  if (typeof value === "string" && THEME_NAMES.includes(value as ThemeName)) {
-    return value as ThemeName;
-  }
-  if (value !== undefined) {
-    console.error(
-      `Invalid theme "${String(value)}" in config; expected one of ${THEME_NAMES.join(", ")}. Using "default".`,
-    );
-  }
-  return "default";
-}
-
-export interface UserSettings {
+// Each field falls back on its own so one bad value doesn't discard the rest
+// of the config.
+const UserSettingsSchema = z.object({
   /** Color scheme: default | terminal | mono | tokyo-night */
-  theme?: ThemeName;
+  theme: z
+    .enum(THEME_NAMES)
+    .optional()
+    .catch(({ value }) => {
+      console.error(
+        `Invalid theme ${JSON.stringify(value)} in config; expected one of ${THEME_NAMES.join(", ")}. Using "default".`,
+      );
+      return undefined;
+    }),
   /** How often to poll GitHub, in milliseconds (default 15000). */
-  pollIntervalMs?: number;
+  pollIntervalMs: z.number().positive().optional().catch(undefined),
   /** Optional GitHub token override (otherwise env / `gh auth token`). */
-  githubToken?: string;
-}
+  githubToken: z.string().optional().catch(undefined),
+});
+
+export type UserSettings = z.infer<typeof UserSettingsSchema>;
 
 export interface RuntimeSettings {
   raw: UserSettings;
@@ -53,8 +59,7 @@ export async function loadUserSettings(): Promise<RuntimeSettings> {
     }
 
     const content = await file.text();
-    const settings = JSON.parse(content) as UserSettings;
-    return compileSettings(settings);
+    return compileSettings(UserSettingsSchema.parse(JSON.parse(content)));
   } catch (error) {
     console.error(`Failed to load config from ${configPath}:`, error);
     return createDefaultSettings();
@@ -66,15 +71,10 @@ function createDefaultSettings(): RuntimeSettings {
 }
 
 function compileSettings(settings: UserSettings): RuntimeSettings {
-  const pollIntervalMs =
-    typeof settings.pollIntervalMs === "number" && settings.pollIntervalMs > 0
-      ? settings.pollIntervalMs
-      : undefined;
-
   return {
     raw: settings,
-    theme: parseThemeName(settings.theme),
-    pollIntervalMs,
+    theme: settings.theme ?? "default",
+    pollIntervalMs: settings.pollIntervalMs,
     githubToken: settings.githubToken,
   };
 }

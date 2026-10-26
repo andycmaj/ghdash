@@ -99,7 +99,7 @@ function AppContent() {
       showToast("Set GHDASH_LOKI_URL to enable logs");
       return;
     }
-    openUrl(url);
+    void openUrl(url);
     showToast(`Opening logs for dev-${state.pr.number}`);
   }
 

@@ -73,7 +73,7 @@ export function SectionTree() {
       },
       [Commands.OPEN_IN_BROWSER]: () => {
         if (state.pr) {
-          openUrl(state.pr.url);
+          void openUrl(state.pr.url);
           showToast("Opening in browser");
         }
       },

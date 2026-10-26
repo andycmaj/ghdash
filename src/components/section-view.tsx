@@ -235,7 +235,7 @@ export function SectionView() {
   function openSelected() {
     const url = itemUrls()[cursor()] ?? state.pr?.url;
     if (url) {
-      openUrl(url);
+      void openUrl(url);
       showToast("Opening in browser");
     }
   }

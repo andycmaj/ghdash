@@ -30,8 +30,8 @@ const main = defineCommand({
     },
   },
   run({ args }) {
-    const parsedPoll = parseInt(String(args.poll ?? ""), 10);
-    const prArg = String(args.pr ?? "").trim();
+    const parsedPoll = parseInt(args.poll ?? "", 10);
+    const prArg = (args.pr ?? "").trim();
     const prSpec = prArg ? parsePrSpec(prArg) : null;
 
     if (prArg && !prSpec) {

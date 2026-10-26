@@ -25,7 +25,7 @@ const version: string = process.env.GHDASH_TUI_BUILD_VERSION || pkg.version;
 const singleFlag = process.argv.includes("--single");
 
 const allTargets: {
-  os: string;
+  os: "linux" | "darwin";
   arch: "arm64" | "x64";
 }[] = [
   {
@@ -80,7 +80,7 @@ for (const item of targets) {
       //@ts-ignore (bun types aren't up to date)
       autoloadTsconfig: true,
       autoloadPackageJson: true,
-      target: `bun-${item.os}-${item.arch}` as any,
+      target: `bun-${item.os}-${item.arch}`,
       outfile: `dist/${name}/bin/ghdash`,
       execArgv: ["--"],
       windows: {},

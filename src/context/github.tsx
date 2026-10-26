@@ -227,8 +227,8 @@ export function GithubProvider(props: ParentProps<GithubProviderProps>) {
           repo = rc.repo;
         }
         const number = spec.number;
-        setState("repo", { owner: owner!, repo: repo!, branch: `#${number}` });
-        currentTarget = { kind: "number", owner: owner!, repo: repo!, number };
+        setState("repo", { owner, repo, branch: `#${number}` });
+        currentTarget = { kind: "number", owner, repo, number };
       } else {
         const rc = yield* call(() => getRepoContext());
         setState("repo", rc);
@@ -256,7 +256,7 @@ export function GithubProvider(props: ParentProps<GithubProviderProps>) {
       }
 
       try {
-        const dashboard = yield* call(fetchForTarget(currentTarget!));
+        const dashboard = yield* call(fetchForTarget(currentTarget));
         applyDashboard(dashboard);
       } catch (err) {
         // Polling again before the quota resets would only extend the limit, so
@@ -286,7 +286,7 @@ export function GithubProvider(props: ParentProps<GithubProviderProps>) {
 
   onCleanup(() => {
     if (mainTask) {
-      mainTask.halt();
+      void mainTask.halt();
       mainTask = null;
     }
   });

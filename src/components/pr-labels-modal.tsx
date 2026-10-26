@@ -138,7 +138,7 @@ export function PrLabelsModal(props: PrLabelsModalProps) {
             <For each={filtered()}>
               {(label, index) => {
                 const isCursor = () => index() === nav.selected();
-                const isChecked = () => !!checked[label.name];
+                const isChecked = () => checked[label.name];
                 const fg = () =>
                   isCursor()
                     ? contrastingForeground(theme.primary)

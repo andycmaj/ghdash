@@ -41,7 +41,19 @@ function fakeFetch(responses: Response[]) {
     if (!next) throw new Error("unexpected request");
     return next;
   };
-  return { calls, fetch: impl as unknown as typeof fetch };
+  return {
+    calls,
+    fetch: Object.assign(impl, { preconnect: fetch.preconnect }),
+  };
+}
+
+// bun-types declares `.rejects.toThrow()` as void, so awaiting it trips
+// await-thenable; settle the promise ourselves instead.
+function rejection(promise: Promise<unknown>): Promise<unknown> {
+  return promise.then(
+    () => undefined,
+    (err: unknown) => err,
+  );
 }
 
 describe("GithubClient throttling", () => {
@@ -55,7 +67,7 @@ describe("GithubClient throttling", () => {
     });
 
     const before = Date.now();
-    await expect(client.listMyOpenPrs()).rejects.toThrow();
+    expect(await rejection(client.listMyOpenPrs())).toBeInstanceOf(Error);
 
     expect(calls.count).toBe(1);
     expect(changes).toHaveLength(1);
@@ -68,7 +80,7 @@ describe("GithubClient throttling", () => {
     const { fetch } = fakeFetch([primaryLimit(600)]);
     const client = new GithubClient({ tokenOverride: "t", fetch });
 
-    await expect(client.listMyOpenPrs()).rejects.toThrow();
+    expect(await rejection(client.listMyOpenPrs())).toBeInstanceOf(Error);
 
     const remaining = client.throttledUntil!.getTime() - Date.now();
     expect(remaining).toBeGreaterThan(590_000);

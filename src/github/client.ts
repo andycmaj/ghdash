@@ -28,6 +28,21 @@ import {
   normalizeStatusContextState,
   prStatus,
 } from "./status-utils";
+import { oneOf } from "@/utils/guards";
+
+const MERGEABLE: readonly Mergeable[] = ["MERGEABLE", "CONFLICTING", "UNKNOWN"];
+const REVIEW_DECISIONS: readonly NonNullable<ReviewDecision>[] = [
+  "APPROVED",
+  "CHANGES_REQUESTED",
+  "REVIEW_REQUIRED",
+];
+const REVIEW_STATES: readonly ReviewState[] = [
+  "APPROVED",
+  "CHANGES_REQUESTED",
+  "COMMENTED",
+  "DISMISSED",
+  "PENDING",
+];
 
 export class GithubAuthError extends Error {}
 export class PrNotFoundError extends Error {}
@@ -529,9 +544,9 @@ export class GithubClient {
       headRef: node.headRefName,
       baseRef: node.baseRefName,
       author: toAuthor(node.author),
-      mergeable: (node.mergeable as Mergeable) ?? "UNKNOWN",
+      mergeable: oneOf(MERGEABLE, node.mergeable) ?? "UNKNOWN",
       mergeStateStatus: node.mergeStateStatus ?? "UNKNOWN",
-      reviewDecision: (node.reviewDecision as ReviewDecision) ?? null,
+      reviewDecision: oneOf(REVIEW_DECISIONS, node.reviewDecision) ?? null,
       reviewRequests: mapReviewRequests(node),
       mergeQueue: node.mergeQueueEntry
         ? {
@@ -721,7 +736,7 @@ function buildFeed(node: PRNode, reviewThreads: ReviewThread[]): FeedItem[] {
       body: r.body ?? "",
       createdAt: r.createdAt,
       url: r.url,
-      reviewState: (r.state as ReviewState) ?? "COMMENTED",
+      reviewState: oneOf(REVIEW_STATES, r.state) ?? "COMMENTED",
     });
   }
 

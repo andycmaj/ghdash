@@ -21,6 +21,8 @@ process.chdir(dir);
 
 type Bump = "major" | "minor" | "patch";
 
+const BUMPS: readonly Bump[] = ["major", "minor", "patch"];
+
 function bumpVersion(current: string, bump: Bump): string {
   const [major, minor, patch] = current
     .replace(/^v/, "")
@@ -32,21 +34,25 @@ function bumpVersion(current: string, bump: Bump): string {
     throw new Error(`Cannot parse semver from "${current}"`);
   }
 
-  switch (bump) {
-    case "major":
-      return `${major + 1}.0.0`;
-    case "minor":
-      return `${major}.${minor + 1}.0`;
-    case "patch":
-      return `${major}.${minor}.${patch + 1}`;
-  }
+  const next: Record<Bump, string> = {
+    major: `${major + 1}.0.0`,
+    minor: `${major}.${minor + 1}.0`,
+    patch: `${major}.${minor}.${patch + 1}`,
+  };
+  return next[bump];
 }
 
 const pkgPath = path.join(dir, "package.json");
 const pkg = await Bun.file(pkgPath).json();
 
 const override = process.env.GHDASH_TUI_VERSION?.trim();
-const bump = (process.env.GHDASH_TUI_BUMP?.trim() || "patch") as Bump;
+const rawBump = process.env.GHDASH_TUI_BUMP?.trim() || "patch";
+const bump = BUMPS.find((b) => b === rawBump);
+if (!bump) {
+  throw new Error(
+    `Invalid GHDASH_TUI_BUMP "${rawBump}"; expected ${BUMPS.join(" | ")}`,
+  );
+}
 
 const version = override
   ? override.replace(/^v/, "")

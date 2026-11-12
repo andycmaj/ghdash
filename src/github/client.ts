@@ -10,6 +10,7 @@ import {
   type Annotation,
   type Author,
   type CheckRun,
+  type CheckStatus,
   type FeedItem,
   type Label,
   type Mergeable,
@@ -23,6 +24,7 @@ import {
   type ReviewState,
   type ReviewStatus,
   type ReviewThread,
+  type WorkflowRunRef,
 } from "./types";
 import {
   requestedTeams,
@@ -31,6 +33,7 @@ import {
 } from "./review-status";
 import {
   computeMergeBlockers,
+  markSupersededRuns,
   normalizeCheckStatus,
   normalizeStatusContextState,
   prStatus,
@@ -73,37 +76,69 @@ export async function resolveToken(override?: string): Promise<string> {
 
 // Check runs + legacy statuses on a commit's rollup. Shared by the PR head
 // commit and the merge-group commit of its merge-queue entry.
-const CHECK_CONTEXTS = `
-  contexts(first: 100) {
-    nodes {
-      __typename
-      ... on CheckRun {
-        name
-        status
-        conclusion
-        detailsUrl
-        startedAt
-        completedAt
-        checkSuite { workflowRun { workflow { name } } }
-        annotations(first: 20) {
-          nodes {
-            annotationLevel
-            message
-            title
-            path
-            location { start { line } }
-          }
+const CONTEXT_NODES = `
+  pageInfo { hasNextPage endCursor }
+  nodes {
+    __typename
+    ... on CheckRun {
+      name
+      status
+      conclusion
+      detailsUrl
+      startedAt
+      completedAt
+      checkSuite {
+        workflowRun {
+          databaseId
+          runNumber
+          runAttempt
+          event
+          createdAt
+          workflow { name }
         }
       }
-      ... on StatusContext {
-        context
-        state
-        targetUrl
-        createdAt
+      annotations(first: 20) {
+        nodes {
+          annotationLevel
+          message
+          title
+          path
+          location { start { line } }
+        }
       }
+    }
+    ... on StatusContext {
+      context
+      state
+      targetUrl
+      createdAt
     }
   }
 `;
+
+// The commit id lets later pages be fetched by node id (see allContexts).
+const CHECK_ROLLUP = `
+  id
+  statusCheckRollup {
+    state
+    contexts(first: 100) { ${CONTEXT_NODES} }
+  }
+`;
+
+const MORE_CONTEXTS_QUERY = `
+query MoreContexts($id: ID!, $after: String!) {
+  node(id: $id) {
+    ... on Commit {
+      statusCheckRollup {
+        contexts(first: 100, after: $after) { ${CONTEXT_NODES} }
+      }
+    }
+  }
+}`;
+
+// A PR re-run a few times over can carry hundreds of contexts; stop well
+// short of burning the rate limit on a pathological commit.
+const MAX_CONTEXT_PAGES = 10;
 
 // The queue is selected through the PR's own entry, so it resolves to null for
 // PRs that aren't queued. Other entries only need a one-line rollup state.
@@ -113,9 +148,7 @@ const MERGE_QUEUE_ENTRY = `
     position
     enqueuedAt
     estimatedTimeToMerge
-    headCommit {
-      statusCheckRollup { ${CHECK_CONTEXTS} }
-    }
+    headCommit { ${CHECK_ROLLUP} }
     mergeQueue {
       entries(first: 50) {
         nodes {
@@ -198,11 +231,7 @@ const PR_FIELDS = `
   }
   commits(last: 1) {
     nodes {
-      commit {
-        statusCheckRollup {
-          ${CHECK_CONTEXTS}
-        }
-      }
+      commit { ${CHECK_ROLLUP} }
     }
   }
 `;
@@ -636,6 +665,33 @@ export class GithubClient {
     return result;
   }
 
+  // Every context on a commit's rollup: the first page came with the PR
+  // query, the rest are paged by the commit's node id.
+  private async allContexts(
+    octokit: Octokit,
+    commit: GqlRollupCommit | null | undefined,
+  ): Promise<GqlCheckContext[]> {
+    const first = commit?.statusCheckRollup?.contexts;
+    const nodes = [...(first?.nodes ?? [])];
+    const id = commit?.id;
+    if (!id) return nodes;
+    let cursor = first?.pageInfo?.hasNextPage ? first.pageInfo.endCursor : null;
+    for (let pages = 1; cursor; pages++) {
+      if (pages >= MAX_CONTEXT_PAGES) {
+        console.warn(`check contexts truncated at ${nodes.length} on ${id}`);
+        break;
+      }
+      const data = await octokit.graphql<MoreContextsResult>(
+        MORE_CONTEXTS_QUERY,
+        { id, after: cursor },
+      );
+      const more = data.node?.statusCheckRollup?.contexts;
+      nodes.push(...(more?.nodes ?? []));
+      cursor = more?.pageInfo?.hasNextPage ? more.pageInfo.endCursor : null;
+    }
+    return nodes;
+  }
+
   private async nodeToDashboard(
     octokit: Octokit,
     node: PRNode,
@@ -675,20 +731,23 @@ export class GithubClient {
 
     const reviewThreads = mapReviewThreads(node);
     const feed = buildFeed(node, reviewThreads);
-    const checks = mapChecks(
-      node.commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes,
+    const headCommit = node.commits?.nodes?.[0]?.commit;
+    const entry = node.mergeQueueEntry;
+    const checks = markSupersededRuns(
+      mapChecks(await this.allContexts(octokit, headCommit)),
     );
+    const checksRollup = rollupStatus(headCommit);
     const review = await this.reviewStatus(octokit, node, pr);
     const mergeBlockers = computeMergeBlockers(
       pr,
       checks,
       reviewThreads,
       review,
+      checksRollup,
     );
-    const entry = node.mergeQueueEntry;
     const mergeQueueItems = mapMergeQueueItems(entry, node.number);
-    const mergeQueueChecks = mapChecks(
-      entry?.headCommit?.statusCheckRollup?.contexts?.nodes,
+    const mergeQueueChecks = markSupersededRuns(
+      mapChecks(await this.allContexts(octokit, entry?.headCommit)),
     );
 
     return {
@@ -696,9 +755,11 @@ export class GithubClient {
       feed,
       reviewThreads,
       checks,
+      checksRollup,
       mergeBlockers,
       mergeQueueItems,
       mergeQueueChecks,
+      mergeQueueChecksRollup: rollupStatus(entry?.headCommit),
     };
   }
 }
@@ -713,6 +774,7 @@ function mapChecks(contexts: GqlCheckContext[] = []): CheckRun[] {
         id: c.name ?? "check",
         name: c.name ?? "check",
         workflowName: c.checkSuite?.workflowRun?.workflow?.name,
+        run: mapRun(c.checkSuite?.workflowRun),
         status: normalizeCheckStatus(c.status, c.conclusion),
         conclusion: c.conclusion ?? undefined,
         url: c.detailsUrl ?? undefined,
@@ -733,6 +795,26 @@ function mapChecks(contexts: GqlCheckContext[] = []): CheckRun[] {
   }
 
   return checks;
+}
+
+function mapRun(
+  run: GqlWorkflowRun | null | undefined,
+): WorkflowRunRef | undefined {
+  if (run?.databaseId == null) return undefined;
+  return {
+    id: run.databaseId,
+    number: run.runNumber ?? 0,
+    attempt: run.runAttempt ?? 1,
+    event: run.event ?? undefined,
+    createdAt: run.createdAt ?? undefined,
+  };
+}
+
+function rollupStatus(
+  commit: GqlRollupCommit | null | undefined,
+): CheckStatus | null {
+  const state = commit?.statusCheckRollup?.state;
+  return state ? normalizeStatusContextState(state) : null;
 }
 
 function mapMergeQueueItems(
@@ -927,7 +1009,7 @@ interface GqlCheckContext {
   detailsUrl?: string;
   startedAt?: string;
   completedAt?: string;
-  checkSuite?: { workflowRun?: { workflow?: { name?: string } } };
+  checkSuite?: { workflowRun?: GqlWorkflowRun | null } | null;
   annotations?: { nodes?: GqlAnnotation[] };
   // StatusContext
   context?: string;
@@ -936,9 +1018,32 @@ interface GqlCheckContext {
   createdAt?: string;
 }
 
+interface GqlWorkflowRun {
+  databaseId?: number | null;
+  runNumber?: number | null;
+  runAttempt?: number | null;
+  event?: string | null;
+  createdAt?: string | null;
+  workflow?: { name?: string } | null;
+}
+
+interface GqlContextPage {
+  pageInfo?: { hasNextPage?: boolean; endCursor?: string | null };
+  nodes?: GqlCheckContext[];
+}
+
 interface GqlCheckRollup {
   state?: string;
-  contexts?: { nodes?: GqlCheckContext[] };
+  contexts?: GqlContextPage;
+}
+
+interface GqlRollupCommit {
+  id?: string;
+  statusCheckRollup?: GqlCheckRollup | null;
+}
+
+interface MoreContextsResult {
+  node?: { statusCheckRollup?: { contexts?: GqlContextPage } | null } | null;
 }
 
 interface GqlMergeQueueEntry {
@@ -947,7 +1052,7 @@ interface GqlMergeQueueEntry {
   position?: number | null;
   enqueuedAt?: string | null;
   estimatedTimeToMerge?: number | null;
-  headCommit?: { statusCheckRollup?: GqlCheckRollup | null } | null;
+  headCommit?: GqlRollupCommit | null;
   mergeQueue?: {
     entries?: { nodes?: (GqlQueuedEntry | null)[] };
   } | null;
@@ -1022,9 +1127,7 @@ interface PRNode {
   reviewThreads?: { nodes?: GqlReviewThread[] };
   commits?: {
     nodes?: {
-      commit?: {
-        statusCheckRollup?: GqlCheckRollup | null;
-      };
+      commit?: GqlRollupCommit;
     }[];
   };
 }

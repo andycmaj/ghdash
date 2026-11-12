@@ -62,6 +62,12 @@ layer, so keys only ever reach one handler.
   approval (membership via `organization.team.members`, cached 10 min in the
   client; needs `read:org`). GraphQL calls are spaced 1s apart by octokit's
   throttler, so the membership query costs a second when not cached.
+  Checks: a commit's rollup contexts are paged past the first 100 by commit
+  node id (`allContexts`). Jobs group per workflow *run*; when one SHA has
+  several runs of a workflow+event, older ones are marked `superseded`, shown
+  collapsed and left out of the verdict. `statusCheckRollup.state` is kept as
+  `checksRollup`; a disagreement shows as a notice, and wins the merge
+  blocker unless superseded runs explain it.
 - Views: left pane `components/section-tree.tsx` (Feed / Actions / Merge queue
   (only while queued) / Mergeability),
   right pane `components/section-view.tsx` (the selected section's content).

@@ -25,6 +25,7 @@ export function MergeQueueSection(
   props: SectionProps & {
     nodes: () => ActionsNode[];
     showAnnotations: () => boolean;
+    notice?: () => string | null;
   },
 ) {
   const { state } = useGithub();
@@ -79,6 +80,7 @@ export function MergeQueueSection(
         nodes={props.nodes}
         showAnnotations={props.showAnnotations}
         emptyText="Merge-group run hasn't started yet."
+        notice={props.notice}
       />
     </Show>
   );

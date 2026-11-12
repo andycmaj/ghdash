@@ -30,6 +30,7 @@ import {
   PRStatus,
   SectionKey,
   type CheckRun,
+  type CheckStatus,
   type FeedItem,
   type Label,
   type MergeBlocker,
@@ -52,9 +53,11 @@ interface GithubState {
   feed: FeedItem[];
   reviewThreads: ReviewThread[];
   checks: CheckRun[];
+  checksRollup: CheckStatus | null;
   mergeBlockers: MergeBlocker[];
   mergeQueueItems: MergeQueueItem[];
   mergeQueueChecks: CheckRun[];
+  mergeQueueChecksRollup: CheckStatus | null;
   selectedSection: SectionKey;
   lastFetchedAt: string | null;
   // When GitHub will let us make requests again, while we're being throttled.
@@ -109,9 +112,11 @@ export function GithubProvider(props: ParentProps<GithubProviderProps>) {
     feed: [],
     reviewThreads: [],
     checks: [],
+    checksRollup: null,
     mergeBlockers: [],
     mergeQueueItems: [],
     mergeQueueChecks: [],
+    mergeQueueChecksRollup: null,
     selectedSection: SectionKey.Feed,
     lastFetchedAt: null,
     throttledUntil: null,
@@ -157,10 +162,13 @@ export function GithubProvider(props: ParentProps<GithubProviderProps>) {
         s.feed = dashboard.feed;
         s.reviewThreads = dashboard.reviewThreads;
         s.checks = dashboard.checks;
+        // `?? null` keeps JSON fixtures captured before rollups were kept loading.
+        s.checksRollup = dashboard.checksRollup ?? null;
         s.mergeBlockers = dashboard.mergeBlockers;
         // `?? []` keeps JSON fixtures captured before the merge queue was added loading.
         s.mergeQueueItems = dashboard.mergeQueueItems ?? [];
         s.mergeQueueChecks = dashboard.mergeQueueChecks ?? [];
+        s.mergeQueueChecksRollup = dashboard.mergeQueueChecksRollup ?? null;
         // The section disappears once the PR leaves the queue.
         if (
           s.selectedSection === SectionKey.MergeQueue &&

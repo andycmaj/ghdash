@@ -85,10 +85,24 @@ export interface Annotation {
   startLine?: number;
 }
 
+// The Actions workflow run a job belongs to. One SHA can carry several runs
+// of the same workflow (re-pushes, re-triggered events).
+export interface WorkflowRunRef {
+  id: number;
+  number: number;
+  attempt: number;
+  event?: string;
+  createdAt?: string;
+}
+
 export interface CheckRun {
   id: string;
   name: string;
   workflowName?: string;
+  run?: WorkflowRunRef;
+  // A newer run of the same workflow and event exists on this commit. Kept
+  // visible, but left out of the verdict, as GitHub's required checks do.
+  superseded?: boolean;
   status: CheckStatus;
   conclusion?: string;
   url?: string;
@@ -228,11 +242,14 @@ export interface PRDashboard {
   feed: FeedItem[];
   reviewThreads: ReviewThread[];
   checks: CheckRun[];
+  // GitHub's own statusCheckRollup.state for the head commit.
+  checksRollup: CheckStatus | null;
   mergeBlockers: MergeBlocker[];
   // Empty unless the PR is in the merge queue.
   mergeQueueItems: MergeQueueItem[];
   // Checks for this PR's merge-group run (not its head commit).
   mergeQueueChecks: CheckRun[];
+  mergeQueueChecksRollup: CheckStatus | null;
 }
 
 export const SectionKey = {

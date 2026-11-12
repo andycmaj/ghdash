@@ -3,12 +3,16 @@ import {
   actionsJobId,
   aggregateStatus,
   canMerge,
+  checksVerdict,
   computeMergeBlockers,
   countChecks,
   groupChecksByWorkflow,
+  markSupersededRuns,
   normalizeCheckStatus,
   normalizeStatusContextState,
   prStatus,
+  rollupNotice,
+  workflowExpandedByDefault,
 } from "./status-utils";
 import {
   CheckStatus,
@@ -32,6 +36,18 @@ function makeJob(
   url?: string,
 ): CheckRun {
   return { id: name, name, workflowName, status, url, annotations: [] };
+}
+
+function runJob(
+  name: string,
+  workflowName: string,
+  status: CheckStatus,
+  run: { id: number; number: number; attempt?: number; event?: string },
+): CheckRun {
+  return {
+    ...makeJob(name, workflowName, status),
+    run: { attempt: 1, event: "pull_request", ...run },
+  };
 }
 
 function makePR(overrides: Partial<PullRequest> = {}): PullRequest {
@@ -164,6 +180,131 @@ describe("groupChecksByWorkflow", () => {
   });
 });
 
+describe("markSupersededRuns", () => {
+  const older = { id: 100, number: 7 };
+  const newer = { id: 200, number: 8 };
+
+  test("older runs of a workflow on the same event are superseded", () => {
+    const checks = markSupersededRuns([
+      runJob("results", "CI", CheckStatus.Failure, older),
+      runJob("results", "CI", CheckStatus.Success, newer),
+      runJob("lint", "Lint", CheckStatus.Success, { id: 300, number: 1 }),
+      makeJob("legacy", undefined, CheckStatus.Success),
+    ]);
+    expect(checks.map((c) => !!c.superseded)).toEqual([
+      true,
+      false,
+      false,
+      false,
+    ]);
+  });
+
+  test("a re-run attempt supersedes nothing but its own earlier jobs' run", () => {
+    const checks = markSupersededRuns([
+      runJob("a", "CI", CheckStatus.Success, {
+        id: 100,
+        number: 7,
+        attempt: 2,
+      }),
+      runJob("b", "CI", CheckStatus.Success, {
+        id: 100,
+        number: 7,
+        attempt: 2,
+      }),
+    ]);
+    expect(checks.some((c) => c.superseded)).toBe(false);
+  });
+
+  test("runs from different events stay independent", () => {
+    const checks = markSupersededRuns([
+      runJob("build", "CI", CheckStatus.Success, { ...older, event: "push" }),
+      runJob("build", "CI", CheckStatus.Failure, newer),
+    ]);
+    expect(checks.some((c) => c.superseded)).toBe(false);
+  });
+});
+
+describe("groupChecksByWorkflow with duplicate runs", () => {
+  const checks = markSupersededRuns([
+    runJob("results", "CI", CheckStatus.Failure, { id: 100, number: 7 }),
+    runJob("lint", "Lint", CheckStatus.Success, { id: 300, number: 1 }),
+    runJob("results", "CI", CheckStatus.Success, { id: 200, number: 8 }),
+    runJob("smoke", "CI", CheckStatus.Pending, { id: 200, number: 8 }),
+  ]);
+
+  test("one group per run, current run first with its superseded run after", () => {
+    const groups = groupChecksByWorkflow(checks);
+    expect(
+      groups.map((g) => [g.name, g.runLabel, g.superseded, g.jobs.length]),
+    ).toEqual([
+      ["CI", "#8", false, 2],
+      ["CI", "#7", true, 1],
+      ["Lint", undefined, false, 1],
+    ]);
+    expect(groups[1]?.status).toBe(CheckStatus.Failure);
+  });
+
+  test("superseded runs collapse even when they failed", () => {
+    const [current, stale] = groupChecksByWorkflow(checks);
+    expect(current && workflowExpandedByDefault(current)).toBe(true);
+    expect(stale && workflowExpandedByDefault(stale)).toBe(false);
+  });
+
+  test("labels a lone re-run with its attempt", () => {
+    const [group] = groupChecksByWorkflow([
+      runJob("build", "CI", CheckStatus.Success, {
+        id: 1,
+        number: 4,
+        attempt: 2,
+      }),
+    ]);
+    expect(group?.runLabel).toBe("#4 attempt 2");
+  });
+});
+
+describe("checksVerdict", () => {
+  const superseded = markSupersededRuns([
+    runJob("results", "CI", CheckStatus.Failure, { id: 100, number: 7 }),
+    runJob("results", "CI", CheckStatus.Success, { id: 200, number: 8 }),
+  ]);
+
+  test("ignores superseded runs, notes GitHub counting them", () => {
+    const verdict = checksVerdict(superseded, CheckStatus.Failure);
+    expect(verdict.status).toBe(CheckStatus.Success);
+    expect(verdict.counts.total).toBe(1);
+    expect(verdict.rollupMismatch).toBe(CheckStatus.Failure);
+    expect(verdict.explainedBySuperseded).toBe(true);
+    expect(rollupNotice(verdict)).toBe(
+      "GitHub reports failure for this commit, counting superseded runs",
+    );
+  });
+
+  test("flags a rollup the loaded checks can't explain", () => {
+    const verdict = checksVerdict(
+      [makeJob("build", "CI", CheckStatus.Success)],
+      CheckStatus.Failure,
+    );
+    expect(verdict.explainedBySuperseded).toBe(false);
+    expect(rollupNotice(verdict)).toContain("some checks may be missing");
+  });
+
+  test("agreeing rollups (and pending vs running) are no mismatch", () => {
+    expect(
+      checksVerdict(
+        [makeJob("build", "CI", CheckStatus.Running)],
+        CheckStatus.Pending,
+      ).rollupMismatch,
+    ).toBeNull();
+    expect(
+      checksVerdict(
+        [makeJob("build", "CI", CheckStatus.Skipped)],
+        CheckStatus.Success,
+      ).rollupMismatch,
+    ).toBeNull();
+    expect(checksVerdict([], null).rollupMismatch).toBeNull();
+  });
+});
+
 describe("canMerge", () => {
   const sat = (satisfied: boolean): MergeBlocker => ({
     kind: MergeBlockerKind.Draft,
@@ -242,6 +383,40 @@ describe("computeMergeBlockers", () => {
       (b) => b.kind === MergeBlockerKind.FailingCheck,
     );
     expect(check?.satisfied).toBe(false);
+  });
+
+  test("a failure in a superseded run doesn't block", () => {
+    const checks = markSupersededRuns([
+      runJob("results", "CI", CheckStatus.Failure, { id: 100, number: 7 }),
+      runJob("results", "CI", CheckStatus.Success, { id: 200, number: 8 }),
+    ]);
+    const check = computeMergeBlockers(
+      makePR(),
+      checks,
+      [],
+      null,
+      CheckStatus.Failure,
+    ).find((b) => b.kind === MergeBlockerKind.FailingCheck);
+    expect(check).toEqual({
+      kind: MergeBlockerKind.FailingCheck,
+      description:
+        "All checks passing · 1 in superseded runs ignored · GitHub reports failure",
+      satisfied: true,
+    });
+  });
+
+  test("GitHub's failing rollup wins when our checks look green", () => {
+    const check = computeMergeBlockers(
+      makePR(),
+      [makeCheck(CheckStatus.Success)],
+      [],
+      null,
+      CheckStatus.Failure,
+    ).find((b) => b.kind === MergeBlockerKind.FailingCheck);
+    expect(check?.satisfied).toBe(false);
+    expect(check?.description).toBe(
+      "All checks passing · GitHub reports failure",
+    );
   });
 
   test("required review satisfied when approved", () => {

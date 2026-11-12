@@ -122,19 +122,22 @@ function prNode(over: Record<string, unknown> = {}) {
     baseRefName: "main",
     author: { login: "me", __typename: "User" },
     reviewDecision: "REVIEW_REQUIRED",
-    reviewRequests: { nodes: [] },
+    reviewRequests: {
+      nodes: [
+        {
+          asCodeOwner: true,
+          requestedReviewer: { __typename: "Team", combinedSlug: "o/core" },
+        },
+        {
+          asCodeOwner: true,
+          requestedReviewer: { __typename: "Team", combinedSlug: "o/pay" },
+        },
+      ],
+    },
     latestOpinionatedReviews: {
       nodes: [{ state: "APPROVED", author: { login: "alice" } }],
     },
-    files: { totalCount: 2, nodes: [{ path: "a.ts" }, { path: "pay/b.ts" }] },
-    baseRepository: { name: "r", owner: { login: "o" } },
-    baseRef: {
-      refUpdateRule: {
-        requiredApprovingReviewCount: 1,
-        requiresCodeOwnerReviews: true,
-      },
-      target: { oid: "abc" },
-    },
+    baseRef: { refUpdateRule: { requiredApprovingReviewCount: 1 } },
     ...over,
   };
 }
@@ -164,15 +167,6 @@ describe("GithubClient review inference", () => {
   const prResponse = {
     data: { repository: { pullRequest: prNode() } },
   };
-  const codeowners = {
-    data: {
-      repository: {
-        a: { text: "* @o/core\n/pay/ @o/pay\n" },
-        b: null,
-        c: null,
-      },
-    },
-  };
   const teams = {
     data: {
       t0: { team: { members: { nodes: [{ login: "alice" }] } } },
@@ -180,52 +174,43 @@ describe("GithubClient review inference", () => {
     },
   };
 
-  test("intersects CODEOWNERS teams with approvals, then serves both from cache", async () => {
-    const { queries, fetch } = recordingFetch([
-      prResponse,
-      codeowners,
-      teams,
-      prResponse,
-    ]);
+  test("credits a requested team with its member's approval, then serves membership from cache", async () => {
+    const { queries, fetch } = recordingFetch([prResponse, teams, prResponse]);
     const client = new GithubClient({ tokenOverride: "t", fetch });
 
     const first = await client.getDashboardByNumber("o", "r", 7);
-    expect(queries).toHaveLength(3);
-    expect(queries[1]).toContain("query Codeowners");
-    expect(queries[2]).toContain("query Teams");
+    expect(queries).toHaveLength(2);
+    expect(queries[1]).toContain("query Teams");
 
     const reviews = first.mergeBlockers.filter(
       (b) => b.kind === "required-review",
     );
     expect(reviews.map((b) => [b.satisfied, b.description])).toEqual([
       [true, "Approved by @alice (1 required)"],
-      [true, "o/core approved by @alice (a.ts)"],
-      [
-        false,
-        "Needs approval from o/pay (pay/b.ts) — team members not visible",
-      ],
+      [true, "o/core approved by @alice"],
+      [false, "Needs approval from o/pay — team members not visible"],
     ]);
 
     await client.getDashboardByNumber("o", "r", 7);
-    expect(queries).toHaveLength(4);
+    expect(queries).toHaveLength(3);
   });
 
-  test("falls back to GitHub's decision when inference fails", async () => {
-    const { fetch } = recordingFetch([
-      prResponse,
-      { errors: [{ message: "boom" }] },
+  test("skips the membership query when no team is requested", async () => {
+    const { queries, fetch } = recordingFetch([
+      {
+        data: {
+          repository: {
+            pullRequest: prNode({ reviewRequests: { nodes: [] } }),
+          },
+        },
+      },
     ]);
     const client = new GithubClient({ tokenOverride: "t", fetch });
-    const warn = console.warn;
-    console.warn = () => {};
-    try {
-      const dash = await client.getDashboardByNumber("o", "r", 7);
-      const review = dash.mergeBlockers.find(
-        (b) => b.kind === "required-review",
-      );
-      expect(review?.description).toBe("Required review not yet approved");
-    } finally {
-      console.warn = warn;
-    }
+    const dash = await client.getDashboardByNumber("o", "r", 7);
+    expect(queries).toHaveLength(1);
+    const review = dash.mergeBlockers.find((b) => b.kind === "required-review");
+    expect(review?.description).toBe(
+      "Approved by @alice (1 required) · GitHub still reports review required",
+    );
   });
 });

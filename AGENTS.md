@@ -56,12 +56,12 @@ layer, so keys only ever reach one handler.
 - Data layer: `src/github/` (Octokit GraphQL + REST). `client.ts` fetches the
   whole dashboard for the current worktree's open PR; `status-utils.ts` maps
   statuses and computes merge blockers; `repo-context.ts` derives owner/repo/branch.
-  Review blockers don't trust GitHub's `reviewDecision`/`reviewRequests` (a
-  team's request vanishes once any member reviews): `review-status.ts` infers
-  them from base-branch CODEOWNERS (`codeowners.ts`) on the changed files,
-  team membership and latest writer reviews. CODEOWNERS (by base oid) and team
-  members (10 min) are cached in the client; GraphQL calls are spaced 1s apart
-  by octokit's throttler, so each extra query costs a second.
+  Review blockers don't trust GitHub's `reviewDecision`/`reviewRequests`: a
+  required (code-owner) team stays pending after one of its members approves.
+  `review-status.ts` credits a requested team with any member's latest
+  approval (membership via `organization.team.members`, cached 10 min in the
+  client; needs `read:org`). GraphQL calls are spaced 1s apart by octokit's
+  throttler, so the membership query costs a second when not cached.
 - Views: left pane `components/section-tree.tsx` (Feed / Actions / Merge queue
   (only while queued) / Mergeability),
   right pane `components/section-view.tsx` (the selected section's content).

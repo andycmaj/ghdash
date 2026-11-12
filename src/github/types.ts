@@ -159,10 +159,9 @@ export interface ReviewRequest {
   asCodeOwner: boolean;
 }
 
-// What the review requirement actually is, worked out from CODEOWNERS, team
-// membership and who has approved, rather than from GitHub's reviewDecision
-// (which drops a team's request as soon as any member reviews, and never says
-// which owners are still missing).
+// What the review requirement actually is. GitHub keeps a required team's
+// request pending (and reviewDecision at REVIEW_REQUIRED) after one of its
+// members approves; this counts the member's approval for the team.
 export interface ReviewStatus {
   // Whether any review is required at all; nothing below blocks when false.
   required: boolean;
@@ -170,24 +169,21 @@ export interface ReviewStatus {
   // Logins (with write access) whose latest review approves.
   approvedBy: string[];
   changesRequestedBy: string[];
-  codeOwnerGroups: CodeOwnerGroup[];
-  // Requested reviewers who haven't responded and don't own any changed file.
+  // Pending code-owner requests, each resolved against who has approved.
+  requirements: ReviewerRequirement[];
+  // Optional requests still waiting on a response.
   otherRequests: ReviewRequest[];
-  // False when CODEOWNERS or the changed-file list couldn't be read in full,
-  // so the code-owner groups may be incomplete.
-  complete: boolean;
   satisfied: boolean;
   githubDecision: ReviewDecision;
 }
 
-// One set of changed files that needs approval from any one of `owners`.
-export interface CodeOwnerGroup {
-  // "@login" or "org/team-slug", as written in CODEOWNERS.
-  owners: string[];
-  paths: string[];
+export interface ReviewerRequirement {
+  // "org/team-slug" or "@login", as in ReviewRequest.
+  reviewer: string;
+  isTeam: boolean;
   approvedBy: string[];
-  // Who could still approve for this group (owners and team members, minus
-  // the PR author); null when a team's membership isn't visible to us.
+  // Who could still approve (team members minus the PR author); null when the
+  // team's membership isn't visible to us.
   candidates: string[] | null;
   satisfied: boolean;
 }

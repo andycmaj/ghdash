@@ -13,6 +13,7 @@ import {
   type PRDashboard,
   type RepoContext,
 } from "./types";
+import { markSupersededRuns } from "./status-utils";
 
 export interface Fixture {
   repo: RepoContext;
@@ -193,15 +194,63 @@ const passingChecks: PRDashboard["checks"] = [
   },
 ];
 
+// One pull_request run of CI and Lint; `last` is the status of CI's final job.
+function duplicateRun(
+  number: number,
+  minsAgo: number,
+  last: CheckStatus,
+): CheckRun[] {
+  const run = (id: number) => ({
+    id,
+    number,
+    attempt: 1,
+    event: "pull_request",
+    createdAt: ago(minsAgo),
+  });
+  const job = (
+    name: string,
+    workflowName: string,
+    id: number,
+    status: CheckStatus,
+  ): CheckRun => ({
+    id: `${id}-${name}`,
+    name,
+    workflowName,
+    run: run(id),
+    status,
+    conclusion:
+      status === CheckStatus.Pending ? undefined : status.toUpperCase(),
+    url: `https://github.com/andycmaj/ghdash/actions/runs/${id}/job/${id}1`,
+    annotations: [],
+    startedAt: ago(minsAgo),
+    completedAt: status === CheckStatus.Pending ? undefined : ago(minsAgo - 5),
+  });
+  const ci = number * 10;
+  const lint = number * 10 + 1;
+  return [
+    job("build", "CI", ci, CheckStatus.Success),
+    job("test", "CI", ci, CheckStatus.Success),
+    job(
+      last === CheckStatus.Failure ? "results" : "smoke-tests",
+      "CI",
+      ci,
+      last,
+    ),
+    job("lint", "Lint PR", lint, CheckStatus.Success),
+  ];
+}
+
 function dashboard(over: Partial<PRDashboard> = {}): PRDashboard {
   return {
     pr: basePr,
     feed: baseFeed,
     reviewThreads: baseThreads,
     checks: passingChecks,
+    checksRollup: CheckStatus.Success,
     mergeBlockers: [],
     mergeQueueItems: [],
     mergeQueueChecks: [],
+    mergeQueueChecksRollup: null,
     ...over,
   };
 }
@@ -417,6 +466,19 @@ export const FIXTURES: Record<string, Fixture> = {
           annotations: [],
         },
       ],
+    }),
+  },
+
+  // ghdash#7: every workflow ran twice on the head SHA. The older CI run
+  // failed, the newer one is still going, and GitHub's rollup says FAILURE.
+  "duplicate-runs": {
+    repo: baseRepo,
+    dashboard: dashboard({
+      checks: markSupersededRuns([
+        ...duplicateRun(9263, 40, CheckStatus.Failure),
+        ...duplicateRun(9308, 20, CheckStatus.Pending),
+      ]),
+      checksRollup: CheckStatus.Failure,
     }),
   },
 

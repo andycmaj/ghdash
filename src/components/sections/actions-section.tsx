@@ -32,7 +32,7 @@ export function buildActionsNodes(
 ): ActionsNode[] {
   const out: ActionsNode[] = [];
   for (const group of groupChecksByWorkflow(checks)) {
-    const open = isExpanded(group.key, workflowExpandedByDefault(group.status));
+    const open = isExpanded(group.key, workflowExpandedByDefault(group));
     out.push({ kind: "workflow", group, expanded: open });
     if (open)
       for (const job of group.jobs) out.push({ kind: "job", check: job });
@@ -75,36 +75,47 @@ export function ActionsSection(
     nodes: () => ActionsNode[];
     showAnnotations: () => boolean;
     emptyText?: string;
+    // GitHub's rollup disagreeing with the checks shown (see rollupNotice).
+    notice?: () => string | null;
   },
 ) {
   const theme = useTheme();
   const workflows = createMemo(() => toWorkflowEntries(props.nodes()));
 
   return (
-    <Show
-      when={workflows().length > 0}
-      fallback={
-        <text fg={theme.textMuted}>
-          {props.emptyText ?? "No checks reported."}
-        </text>
-      }
-    >
-      <For each={workflows()}>
-        {(wf) => (
-          <WorkflowRow
-            group={wf.group}
-            expanded={wf.expanded}
-            jobs={wf.jobs}
-            width={props.width}
-            id={props.idFor(wf.index)}
-            selected={props.selected() === wf.index}
-            selectedIndex={props.selected}
-            idFor={props.idFor}
-            showAnnotations={props.showAnnotations}
-          />
+    <>
+      <Show when={props.notice?.()}>
+        {(notice) => (
+          <box marginBottom={1}>
+            <text fg={theme.warning}>! {notice()}</text>
+          </box>
         )}
-      </For>
-    </Show>
+      </Show>
+      <Show
+        when={workflows().length > 0}
+        fallback={
+          <text fg={theme.textMuted}>
+            {props.emptyText ?? "No checks reported."}
+          </text>
+        }
+      >
+        <For each={workflows()}>
+          {(wf) => (
+            <WorkflowRow
+              group={wf.group}
+              expanded={wf.expanded}
+              jobs={wf.jobs}
+              width={props.width}
+              id={props.idFor(wf.index)}
+              selected={props.selected() === wf.index}
+              selectedIndex={props.selected}
+              idFor={props.idFor}
+              showAnnotations={props.showAnnotations}
+            />
+          )}
+        </For>
+      </Show>
+    </>
   );
 }
 
@@ -158,9 +169,15 @@ function WorkflowRow(props: {
         <text fg={checkStatusColor(theme, g.status)}>
           {checkStatusIcon(g.status)}
         </text>
-        <text fg={theme.text} attributes={1}>
+        <text fg={g.superseded ? theme.textMuted : theme.text} attributes={1}>
           {g.name}
         </text>
+        <Show when={g.runLabel}>
+          <text fg={theme.textMuted}>{g.runLabel}</text>
+        </Show>
+        <Show when={g.superseded}>
+          <text fg={theme.warning}>superseded</text>
+        </Show>
         <text fg={theme.textMuted}>
           ({g.jobs.length}) {summary()}
         </text>

@@ -33,6 +33,7 @@ import { PaneHeader } from "./pane-header";
 import { MainFooter } from "./main-footer";
 import { openUrl } from "@/utils/open-url";
 import { SectionKey } from "@/github/types";
+import { checksVerdict, rollupNotice } from "@/github/status-utils";
 import { PrInfo } from "./pr-info";
 import { FeedSection, feedFilterLabel } from "./sections/feed-section";
 import {
@@ -123,6 +124,15 @@ export function SectionView() {
   const mergeQueueNodes = createMemo<ActionsNode[]>(() =>
     buildActionsNodes(state.mergeQueueChecks, (key, defaultOpen) =>
       isExpanded(mqKey(key), defaultOpen),
+    ),
+  );
+
+  const actionsNotice = createMemo(() =>
+    rollupNotice(checksVerdict(state.checks, state.checksRollup)),
+  );
+  const mergeQueueNotice = createMemo(() =>
+    rollupNotice(
+      checksVerdict(state.mergeQueueChecks, state.mergeQueueChecksRollup),
     ),
   );
 
@@ -456,6 +466,7 @@ export function SectionView() {
               idFor={childId}
               nodes={actionsNodes}
               showAnnotations={showAnnotations}
+              notice={actionsNotice}
             />
           </Match>
           <Match when={state.selectedSection === SectionKey.MergeQueue}>
@@ -465,6 +476,7 @@ export function SectionView() {
               idFor={childId}
               nodes={mergeQueueNodes}
               showAnnotations={showAnnotations}
+              notice={mergeQueueNotice}
             />
           </Match>
           <Match when={state.selectedSection === SectionKey.Mergeability}>

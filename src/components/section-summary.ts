@@ -4,7 +4,7 @@
 import { createMemo, type Accessor } from "solid-js";
 import { useGithub } from "../context/github";
 import { useTheme } from "@/hooks/useTheme";
-import { aggregateStatus, countChecks } from "@/github/status-utils";
+import { checksVerdict } from "@/github/status-utils";
 import { checkStatusColor, checkStatusIcon } from "@/theme/theme";
 import { PRStatus, SectionKey } from "@/github/types";
 
@@ -45,13 +45,22 @@ export function useSectionSummary(): (key: SectionKey) => SectionSummary {
       case SectionKey.Feed:
         return { text: `${state.feed.length}`, color: theme.textMuted };
       case SectionKey.Actions: {
-        const c = countChecks(state.checks);
-        if (c.total === 0) return { text: "—", color: theme.textMuted };
+        const verdict = checksVerdict(state.checks, state.checksRollup);
+        const c = verdict.counts;
+        // A mismatch superseded runs don't explain means checks we can't see.
+        const flag =
+          verdict.rollupMismatch && !verdict.explainedBySuperseded ? " !" : "";
+        const warn = flag ? theme.warning : undefined;
+        if (c.total === 0)
+          return { text: `—${flag}`, color: warn ?? theme.textMuted };
         if (c.failure > 0)
-          return { text: `✗ ${c.failure}`, color: theme.error };
+          return { text: `✗ ${c.failure}${flag}`, color: theme.error };
         if (c.running + c.pending > 0)
-          return { text: `◐ ${c.running + c.pending}`, color: theme.info };
-        return { text: `✓ ${c.success}`, color: theme.success };
+          return {
+            text: `◐ ${c.running + c.pending}${flag}`,
+            color: warn ?? theme.info,
+          };
+        return { text: `✓ ${c.success}${flag}`, color: warn ?? theme.success };
       }
       case SectionKey.MergeQueue: {
         const position = state.pr?.mergeQueue?.position;
@@ -60,7 +69,10 @@ export function useSectionSummary(): (key: SectionKey) => SectionSummary {
           position != null ? `#${position}${of ? `/${of}` : ""}` : "queued";
         if (state.mergeQueueChecks.length === 0)
           return { text: label, color: theme.info };
-        const status = aggregateStatus(countChecks(state.mergeQueueChecks));
+        const { status } = checksVerdict(
+          state.mergeQueueChecks,
+          state.mergeQueueChecksRollup,
+        );
         return {
           text: `${checkStatusIcon(status)} ${label}`,
           color: checkStatusColor(theme, status),

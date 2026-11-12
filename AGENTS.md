@@ -56,6 +56,12 @@ layer, so keys only ever reach one handler.
 - Data layer: `src/github/` (Octokit GraphQL + REST). `client.ts` fetches the
   whole dashboard for the current worktree's open PR; `status-utils.ts` maps
   statuses and computes merge blockers; `repo-context.ts` derives owner/repo/branch.
+  Review blockers don't trust GitHub's `reviewDecision`/`reviewRequests`: a
+  required (code-owner) team stays pending after one of its members approves.
+  `review-status.ts` credits a requested team with any member's latest
+  approval (membership via `organization.team.members`, cached 10 min in the
+  client; needs `read:org`). GraphQL calls are spaced 1s apart by octokit's
+  throttler, so the membership query costs a second when not cached.
 - Views: left pane `components/section-tree.tsx` (Feed / Actions / Merge queue
   (only while queued) / Mergeability),
   right pane `components/section-view.tsx` (the selected section's content).
@@ -81,3 +87,16 @@ This app is a TUI, and as such won't be able to show output on stdout.
 
 Auth: needs a GitHub token via `GITHUB_TOKEN`/`GH_TOKEN`, else it falls back to
 `gh auth token`. Scopes needed: `repo`, `read:org` (and `workflow` for Actions).
+
+## Beta releases
+
+CI builds a beta only for pull requests (`.github/workflows/ghdash-beta.yml`);
+pushing a branch alone builds nothing. When the owner wants to try a branch
+elsewhere, push it and open the PR, wait for the "beta PR #N" run, then report
+the prerelease tag `pr-<N>` and its install line:
+
+```sh
+mise use -g github:andycmaj/ghdash@pr-<N>
+```
+
+New pushes to the PR rebuild `pr-<N>`; closing the PR deletes it.

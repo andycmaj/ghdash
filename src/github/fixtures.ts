@@ -222,7 +222,13 @@ export const FIXTURES: Record<string, Fixture> = {
         status: "draft",
         isDraft: true,
         reviewDecision: "REVIEW_REQUIRED",
-        reviewRequests: [{ name: "octo-org/platform-reviewers", isTeam: true }],
+        reviewRequests: [
+          {
+            name: "octo-org/platform-reviewers",
+            isTeam: true,
+            asCodeOwner: true,
+          },
+        ],
         mergeStateStatus: "DRAFT",
       },
       checks: [

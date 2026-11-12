@@ -155,6 +155,37 @@ export interface ReviewRequest {
   // "octo-org/platform-reviewers"), "@login" for an individual.
   name: string;
   isTeam: boolean;
+  // Requested automatically because the reviewer owns changed files.
+  asCodeOwner: boolean;
+}
+
+// What the review requirement actually is. GitHub keeps a required team's
+// request pending (and reviewDecision at REVIEW_REQUIRED) after one of its
+// members approves; this counts the member's approval for the team.
+export interface ReviewStatus {
+  // Whether any review is required at all; nothing below blocks when false.
+  required: boolean;
+  requiredApprovals: number;
+  // Logins (with write access) whose latest review approves.
+  approvedBy: string[];
+  changesRequestedBy: string[];
+  // Pending code-owner requests, each resolved against who has approved.
+  requirements: ReviewerRequirement[];
+  // Optional requests still waiting on a response.
+  otherRequests: ReviewRequest[];
+  satisfied: boolean;
+  githubDecision: ReviewDecision;
+}
+
+export interface ReviewerRequirement {
+  // "org/team-slug" or "@login", as in ReviewRequest.
+  reviewer: string;
+  isTeam: boolean;
+  approvedBy: string[];
+  // Who could still approve (team members minus the PR author); null when the
+  // team's membership isn't visible to us.
+  candidates: string[] | null;
+  satisfied: boolean;
 }
 
 export interface PullRequest {

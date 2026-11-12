@@ -7,6 +7,8 @@ import {
   type CheckRun,
   type MergeBlocker,
   type PullRequest,
+  type ReviewStatus,
+  type ReviewerRequirement,
   type ReviewThread,
 } from "./types";
 
@@ -213,11 +215,14 @@ export function groupChecksByWorkflow(checks: CheckRun[]): WorkflowGroup[] {
 }
 
 // Derive the merge-blocker checklist from the PR, its checks and review threads.
-// A blocker with satisfied=false is actively blocking the merge.
+// A blocker with satisfied=false is actively blocking the merge. With an
+// inferred review status, review rows come from it instead of GitHub's
+// reviewDecision.
 export function computeMergeBlockers(
   pr: PullRequest,
   checks: CheckRun[],
   reviewThreads: ReviewThread[],
+  review?: ReviewStatus | null,
 ): MergeBlocker[] {
   const blockers: MergeBlocker[] = [];
 
@@ -239,7 +244,9 @@ export function computeMergeBlockers(
   const reviewApproved = pr.reviewDecision === "APPROVED";
   const reviewChanges = pr.reviewDecision === "CHANGES_REQUESTED";
   const reviewRequired = pr.reviewDecision === "REVIEW_REQUIRED";
-  if (reviewChanges || reviewRequired || reviewApproved) {
+  if (review) {
+    if (review.required) blockers.push(...reviewBlockers(review));
+  } else if (reviewChanges || reviewRequired || reviewApproved) {
     // Name who we're still waiting on so an unsatisfied review requirement is
     // actionable (e.g. "waiting on octo-org/platform-reviewers") instead
     // of a bare "review required".
@@ -294,4 +301,93 @@ export function computeMergeBlockers(
   }
 
   return blockers;
+}
+
+const MAX_NAMES = 5;
+
+function names(list: string[]): string {
+  const shown = list.slice(0, MAX_NAMES).join(", ");
+  const more = list.length - MAX_NAMES;
+  return more > 0 ? `${shown} +${more}` : shown;
+}
+
+function at(logins: string[]): string[] {
+  return logins.map((l) => `@${l}`);
+}
+
+function requirementBlocker(req: ReviewerRequirement): MergeBlocker {
+  if (req.satisfied) {
+    const via = req.isTeam ? ` by ${names(at(req.approvedBy))}` : "";
+    return {
+      kind: MergeBlockerKind.RequiredReview,
+      description: `${req.reviewer} approved${via}`,
+      satisfied: true,
+    };
+  }
+  const who = !req.isTeam
+    ? ""
+    : req.candidates === null
+      ? " — team members not visible"
+      : req.candidates.length === 0
+        ? " — no eligible reviewer besides the author"
+        : ` — one of ${names(at(req.candidates))}`;
+  return {
+    kind: MergeBlockerKind.RequiredReview,
+    description: `Needs approval from ${req.reviewer}${who}`,
+    satisfied: false,
+  };
+}
+
+// The review rows: required approval count, one row per required reviewer, and
+// any outstanding change requests. Where this disagrees with GitHub's own
+// reviewDecision, the first row says so.
+function reviewBlockers(review: ReviewStatus): MergeBlocker[] {
+  const rows: MergeBlocker[] = [];
+
+  if (review.requiredApprovals > 0) {
+    const have = review.approvedBy.length;
+    const need = review.requiredApprovals;
+    const enough = have >= need;
+    const by = have > 0 ? ` by ${names(at(review.approvedBy))}` : "";
+    const waiting =
+      !enough && review.otherRequests.length > 0
+        ? ` — waiting on ${names(review.otherRequests.map((r) => r.name))}`
+        : "";
+    rows.push({
+      kind: MergeBlockerKind.RequiredReview,
+      description: enough
+        ? `Approved${by} (${need} required)`
+        : `${have} of ${need} required approval${need === 1 ? "" : "s"}${by}${waiting}`,
+      satisfied: enough,
+    });
+  }
+
+  rows.push(...review.requirements.map(requirementBlocker));
+
+  if (review.changesRequestedBy.length > 0) {
+    rows.push({
+      kind: MergeBlockerKind.RequiredReview,
+      description: `Changes requested by ${names(at(review.changesRequestedBy))}`,
+      satisfied: false,
+    });
+  }
+
+  const notes: string[] = [];
+  if (review.githubDecision === "APPROVED" && !review.satisfied) {
+    notes.push("GitHub reports approved");
+  } else if (
+    review.githubDecision !== null &&
+    review.githubDecision !== "APPROVED" &&
+    review.satisfied
+  ) {
+    notes.push(
+      `GitHub still reports ${review.githubDecision.toLowerCase().replace("_", " ")}`,
+    );
+  }
+  const first = rows[0];
+  if (first && notes.length > 0) {
+    first.description += ` · ${notes.join("; ")}`;
+  }
+
+  return rows;
 }

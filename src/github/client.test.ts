@@ -107,3 +107,110 @@ describe("GithubClient throttling", () => {
     expect(client.throttledUntil).toBeNull();
   });
 });
+
+function prNode(over: Record<string, unknown> = {}) {
+  return {
+    id: "PR_1",
+    number: 7,
+    title: "t",
+    url: "https://github.com/o/r/pull/7",
+    state: "OPEN",
+    isDraft: false,
+    createdAt: "",
+    updatedAt: "",
+    headRefName: "feature",
+    baseRefName: "main",
+    author: { login: "me", __typename: "User" },
+    reviewDecision: "REVIEW_REQUIRED",
+    reviewRequests: {
+      nodes: [
+        {
+          asCodeOwner: true,
+          requestedReviewer: { __typename: "Team", combinedSlug: "o/core" },
+        },
+        {
+          asCodeOwner: true,
+          requestedReviewer: { __typename: "Team", combinedSlug: "o/pay" },
+        },
+      ],
+    },
+    latestOpinionatedReviews: {
+      nodes: [{ state: "APPROVED", author: { login: "alice" } }],
+    },
+    baseRef: { refUpdateRule: { requiredApprovingReviewCount: 1 } },
+    ...over,
+  };
+}
+
+function recordingFetch(responses: object[]) {
+  const queries: string[] = [];
+  const impl = async (_url: unknown, init?: RequestInit) => {
+    const body: unknown = JSON.parse(
+      typeof init?.body === "string" ? init.body : "{}",
+    );
+    queries.push(
+      typeof body === "object" && body && "query" in body
+        ? String(body.query)
+        : "",
+    );
+    const next = responses[queries.length - 1];
+    if (!next) throw new Error("unexpected request");
+    return json(200, next);
+  };
+  return {
+    queries,
+    fetch: Object.assign(impl, { preconnect: fetch.preconnect }),
+  };
+}
+
+describe("GithubClient review inference", () => {
+  const prResponse = {
+    data: { repository: { pullRequest: prNode() } },
+  };
+  const teams = {
+    data: {
+      t0: { team: { members: { nodes: [{ login: "alice" }] } } },
+      t1: { team: null },
+    },
+  };
+
+  test("credits a requested team with its member's approval, then serves membership from cache", async () => {
+    const { queries, fetch } = recordingFetch([prResponse, teams, prResponse]);
+    const client = new GithubClient({ tokenOverride: "t", fetch });
+
+    const first = await client.getDashboardByNumber("o", "r", 7);
+    expect(queries).toHaveLength(2);
+    expect(queries[1]).toContain("query Teams");
+
+    const reviews = first.mergeBlockers.filter(
+      (b) => b.kind === "required-review",
+    );
+    expect(reviews.map((b) => [b.satisfied, b.description])).toEqual([
+      [true, "Approved by @alice (1 required)"],
+      [true, "o/core approved by @alice"],
+      [false, "Needs approval from o/pay — team members not visible"],
+    ]);
+
+    await client.getDashboardByNumber("o", "r", 7);
+    expect(queries).toHaveLength(3);
+  });
+
+  test("skips the membership query when no team is requested", async () => {
+    const { queries, fetch } = recordingFetch([
+      {
+        data: {
+          repository: {
+            pullRequest: prNode({ reviewRequests: { nodes: [] } }),
+          },
+        },
+      },
+    ]);
+    const client = new GithubClient({ tokenOverride: "t", fetch });
+    const dash = await client.getDashboardByNumber("o", "r", 7);
+    expect(queries).toHaveLength(1);
+    const review = dash.mergeBlockers.find((b) => b.kind === "required-review");
+    expect(review?.description).toBe(
+      "Approved by @alice (1 required) · GitHub still reports review required",
+    );
+  });
+});

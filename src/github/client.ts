@@ -6,6 +6,7 @@ import { $ } from "bun";
 import { Octokit } from "octokit";
 import {
   FeedItemKind,
+  PRStatus,
   type Annotation,
   type Author,
   type CheckRun,
@@ -20,8 +21,14 @@ import {
   type ReviewDecision,
   type ReviewRequest,
   type ReviewState,
+  type ReviewStatus,
   type ReviewThread,
 } from "./types";
+import {
+  requestedTeams,
+  inferReviewStatus,
+  type LatestReview,
+} from "./review-status";
 import {
   computeMergeBlockers,
   normalizeCheckStatus,
@@ -149,6 +156,7 @@ const PR_FIELDS = `
   reviewDecision
   reviewRequests(first: 20) {
     nodes {
+      asCodeOwner
       requestedReviewer {
         __typename
         ... on User { login }
@@ -156,6 +164,16 @@ const PR_FIELDS = `
         ... on Mannequin { login }
       }
     }
+  }
+  latestOpinionatedReviews(first: 50, writersOnly: true) {
+    nodes {
+      state
+      author { login }
+      onBehalfOf(first: 10) { nodes { combinedSlug } }
+    }
+  }
+  baseRef {
+    refUpdateRule { requiredApprovingReviewCount }
   }
   ${MERGE_QUEUE_ENTRY}
   headRefName
@@ -222,6 +240,9 @@ query MyOpenPrs($q: String!, $first: Int!) {
     }
   }
 }`;
+
+// Team membership moves slowly; refetching it every poll would just burn quota.
+const TEAM_TTL_MS = 10 * 60 * 1000;
 
 const ENQUEUE_MUTATION = `
 mutation Enqueue($id: ID!) {
@@ -314,6 +335,10 @@ export class GithubClient {
   private readonly onThrottleChange?: (until: Date | null) => void;
   private readonly fetchImpl?: typeof fetch;
   private throttledUntilMs: number | null = null;
+  private teamCache = new Map<
+    string,
+    { members: string[] | null; at: number }
+  >();
 
   constructor(options: GithubClientOptions = {}) {
     this.tokenOverride = options.tokenOverride;
@@ -382,7 +407,7 @@ export class GithubClient {
       );
     }
 
-    return this.nodeToDashboard(node);
+    return this.nodeToDashboard(octokit, node);
   }
 
   // Fetch a specific PR by number (any state).
@@ -403,7 +428,7 @@ export class GithubClient {
       throw new PrNotFoundError(`PR #${number} not found in ${owner}/${repo}.`);
     }
 
-    return this.nodeToDashboard(node);
+    return this.nodeToDashboard(octokit, node);
   }
 
   // The current user's open PRs (as `author:@me`), across every repo they can
@@ -527,7 +552,94 @@ export class GithubClient {
     });
   }
 
-  private nodeToDashboard(node: PRNode): PRDashboard {
+  // The review requirement with team requests credited to their members'
+  // approvals. Failing to read membership degrades to GitHub's own
+  // reviewDecision (null) rather than failing the whole dashboard.
+  private async reviewStatus(
+    octokit: Octokit,
+    node: PRNode,
+    pr: PullRequest,
+  ): Promise<ReviewStatus | null> {
+    if (pr.status !== PRStatus.Open && pr.status !== PRStatus.Draft) {
+      return null;
+    }
+    try {
+      const rule = node.baseRef?.refUpdateRule;
+      return inferReviewStatus({
+        author: pr.author.login,
+        githubDecision: pr.reviewDecision,
+        reviewRequests: pr.reviewRequests,
+        latestReviews: mapLatestReviews(node),
+        protection: rule
+          ? { requiredApprovals: rule.requiredApprovingReviewCount ?? 0 }
+          : null,
+        teamMembers: await this.getTeamMembers(
+          octokit,
+          requestedTeams(pr.reviewRequests),
+        ),
+      });
+    } catch (err) {
+      console.warn("review inference failed; using GitHub's decision", err);
+      return null;
+    }
+  }
+
+  // Members of each "org/team-slug", fetched in one aliased query for the
+  // teams not cached. A team we can't see (secret, or no read:org) maps to null.
+  private async getTeamMembers(
+    octokit: Octokit,
+    slugs: string[],
+  ): Promise<Map<string, string[] | null>> {
+    const now = Date.now();
+    const result = new Map<string, string[] | null>();
+    const missing: { slug: string; org: string; team: string }[] = [];
+    for (const slug of new Set(slugs)) {
+      const cached = this.teamCache.get(slug);
+      if (cached && now - cached.at < TEAM_TTL_MS) {
+        result.set(slug, cached.members);
+        continue;
+      }
+      const [org, team] = slug.split("/");
+      if (org && team) missing.push({ slug, org, team });
+      else result.set(slug, null);
+    }
+    if (missing.length === 0) return result;
+
+    const vars: Record<string, string> = {};
+    const params: string[] = [];
+    const fields: string[] = [];
+    missing.forEach(({ org, team }, i) => {
+      vars[`o${i}`] = org;
+      vars[`t${i}`] = team;
+      params.push(`$o${i}: String!`, `$t${i}: String!`);
+      fields.push(
+        `t${i}: organization(login: $o${i}) { team(slug: $t${i}) { members(first: 100, membership: ALL) { nodes { login } } } }`,
+      );
+    });
+    const query = `query Teams(${params.join(", ")}) { ${fields.join("\n")} }`;
+
+    let data: Record<string, GqlTeamOrg | null | undefined> = {};
+    try {
+      data = await octokit.graphql<Record<string, GqlTeamOrg | null>>(
+        query,
+        vars,
+      );
+    } catch (err) {
+      console.warn("team membership lookup failed", err);
+    }
+    missing.forEach(({ slug }, i) => {
+      const nodes = data[`t${i}`]?.team?.members?.nodes;
+      const members = nodes ? nodes.map((n) => n.login.toLowerCase()) : null;
+      this.teamCache.set(slug, { members, at: now });
+      result.set(slug, members);
+    });
+    return result;
+  }
+
+  private async nodeToDashboard(
+    octokit: Octokit,
+    node: PRNode,
+  ): Promise<PRDashboard> {
     const pr: PullRequest = {
       number: node.number,
       nodeId: node.id,
@@ -566,7 +678,13 @@ export class GithubClient {
     const checks = mapChecks(
       node.commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes,
     );
-    const mergeBlockers = computeMergeBlockers(pr, checks, reviewThreads);
+    const review = await this.reviewStatus(octokit, node, pr);
+    const mergeBlockers = computeMergeBlockers(
+      pr,
+      checks,
+      reviewThreads,
+      review,
+    );
     const entry = node.mergeQueueEntry;
     const mergeQueueItems = mapMergeQueueItems(entry, node.number);
     const mergeQueueChecks = mapChecks(
@@ -670,15 +788,37 @@ function mapReviewRequests(node: PRNode): ReviewRequest[] {
   for (const n of nodes) {
     const reviewer = n.requestedReviewer;
     if (!reviewer) continue;
+    const asCodeOwner = !!n.asCodeOwner;
     if (reviewer.__typename === "Team") {
       if (reviewer.combinedSlug) {
-        requests.push({ name: reviewer.combinedSlug, isTeam: true });
+        requests.push({
+          name: reviewer.combinedSlug,
+          isTeam: true,
+          asCodeOwner,
+        });
       }
     } else if (reviewer.login) {
-      requests.push({ name: `@${reviewer.login}`, isTeam: false });
+      requests.push({ name: `@${reviewer.login}`, isTeam: false, asCodeOwner });
     }
   }
   return requests;
+}
+
+function mapLatestReviews(node: PRNode): LatestReview[] {
+  const reviews: LatestReview[] = [];
+  for (const r of node.latestOpinionatedReviews?.nodes ?? []) {
+    const state = oneOf(REVIEW_STATES, r.state);
+    const login = r.author?.login;
+    if (!state || !login) continue;
+    reviews.push({
+      login,
+      state,
+      onBehalfOf: (r.onBehalfOf?.nodes ?? [])
+        .map((t) => t.combinedSlug)
+        .filter((slug): slug is string => !!slug),
+    });
+  }
+  return reviews;
 }
 
 function mapReviewThreads(node: PRNode): ReviewThread[] {
@@ -834,6 +974,7 @@ interface GqlLabel {
 }
 
 interface GqlReviewRequest {
+  asCodeOwner?: boolean;
   requestedReviewer?: {
     __typename?: string;
     // User / Mannequin
@@ -841,6 +982,16 @@ interface GqlReviewRequest {
     // Team
     combinedSlug?: string;
   } | null;
+}
+
+interface GqlLatestReview {
+  state?: string;
+  author?: { login?: string } | null;
+  onBehalfOf?: { nodes?: { combinedSlug?: string }[] };
+}
+
+interface GqlTeamOrg {
+  team?: { members?: { nodes?: { login: string }[] } } | null;
 }
 
 interface PRNode {
@@ -858,6 +1009,10 @@ interface PRNode {
   mergeStateStatus?: string;
   reviewDecision?: string | null;
   reviewRequests?: { nodes?: GqlReviewRequest[] };
+  latestOpinionatedReviews?: { nodes?: GqlLatestReview[] };
+  baseRef?: {
+    refUpdateRule?: { requiredApprovingReviewCount?: number | null } | null;
+  } | null;
   mergeQueueEntry?: GqlMergeQueueEntry | null;
   headRefName: string;
   baseRefName: string;

@@ -17,6 +17,7 @@ import {
   type CheckRun,
   type MergeBlocker,
   type PullRequest,
+  type ReviewStatus,
   type ReviewThread,
 } from "./types";
 
@@ -260,8 +261,12 @@ describe("computeMergeBlockers", () => {
       makePR({
         reviewDecision: "REVIEW_REQUIRED",
         reviewRequests: [
-          { name: "octo-org/platform-reviewers", isTeam: true },
-          { name: "@octocat", isTeam: false },
+          {
+            name: "octo-org/platform-reviewers",
+            isTeam: true,
+            asCodeOwner: true,
+          },
+          { name: "@octocat", isTeam: false, asCodeOwner: false },
         ],
       }),
       [],
@@ -296,6 +301,116 @@ describe("computeMergeBlockers", () => {
     );
     const behind = blockers.find((b) => b.kind === MergeBlockerKind.BehindBase);
     expect(behind?.satisfied).toBe(false);
+  });
+});
+
+describe("computeMergeBlockers with inferred review status", () => {
+  function status(over: Partial<ReviewStatus> = {}): ReviewStatus {
+    return {
+      required: true,
+      requiredApprovals: 1,
+      approvedBy: [],
+      changesRequestedBy: [],
+      requirements: [],
+      otherRequests: [],
+      satisfied: false,
+      githubDecision: "REVIEW_REQUIRED",
+      ...over,
+    };
+  }
+
+  function reviewRows(review: ReviewStatus): MergeBlocker[] {
+    return computeMergeBlockers(makePR(), [], [], review).filter(
+      (b) => b.kind === MergeBlockerKind.RequiredReview,
+    );
+  }
+
+  test("credits a team with its member's approval and names who can still approve", () => {
+    const rows = reviewRows(
+      status({
+        approvedBy: ["alice"],
+        requirements: [
+          {
+            reviewer: "octo-org/platform",
+            isTeam: true,
+            approvedBy: ["alice"],
+            candidates: ["alice"],
+            satisfied: true,
+          },
+          {
+            reviewer: "octo-org/payments",
+            isTeam: true,
+            approvedBy: [],
+            candidates: ["bob", "carol"],
+            satisfied: false,
+          },
+          {
+            reviewer: "@dave",
+            isTeam: false,
+            approvedBy: [],
+            candidates: ["dave"],
+            satisfied: false,
+          },
+        ],
+      }),
+    );
+    expect(rows.map((r) => [r.satisfied, r.description])).toEqual([
+      [true, "Approved by @alice (1 required)"],
+      [true, "octo-org/platform approved by @alice"],
+      [false, "Needs approval from octo-org/payments — one of @bob, @carol"],
+      [false, "Needs approval from @dave"],
+    ]);
+  });
+
+  test("says when team members aren't visible", () => {
+    const [row] = reviewRows(
+      status({
+        requiredApprovals: 0,
+        requirements: [
+          {
+            reviewer: "octo-org/secret",
+            isTeam: true,
+            approvedBy: [],
+            candidates: null,
+            satisfied: false,
+          },
+        ],
+      }),
+    );
+    expect(row?.description).toBe(
+      "Needs approval from octo-org/secret — team members not visible",
+    );
+  });
+
+  test("flags disagreement with GitHub's decision", () => {
+    const [approved] = reviewRows(
+      status({ approvedBy: ["a"], satisfied: true }),
+    );
+    expect(approved?.description).toBe(
+      "Approved by @a (1 required) · GitHub still reports review required",
+    );
+    const [blocked] = reviewRows(status({ githubDecision: "APPROVED" }));
+    expect(blocked?.satisfied).toBe(false);
+    expect(blocked?.description).toBe(
+      "0 of 1 required approval · GitHub reports approved",
+    );
+  });
+
+  test("lists pending optional reviewers and change requests", () => {
+    const rows = reviewRows(
+      status({
+        otherRequests: [{ name: "@dave", isTeam: false, asCodeOwner: false }],
+        changesRequestedBy: ["bob"],
+      }),
+    );
+    expect(rows.map((r) => r.description)).toEqual([
+      "0 of 1 required approval — waiting on @dave",
+      "Changes requested by @bob",
+    ]);
+  });
+
+  test("no review rows when nothing is required", () => {
+    expect(reviewRows(status({ required: false }))).toEqual([]);
   });
 });
 

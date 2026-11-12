@@ -87,3 +87,16 @@ This app is a TUI, and as such won't be able to show output on stdout.
 
 Auth: needs a GitHub token via `GITHUB_TOKEN`/`GH_TOKEN`, else it falls back to
 `gh auth token`. Scopes needed: `repo`, `read:org` (and `workflow` for Actions).
+
+## Beta releases
+
+CI builds a beta only for pull requests (`.github/workflows/ghdash-beta.yml`);
+pushing a branch alone builds nothing. When the owner wants to try a branch
+elsewhere, push it and open the PR, wait for the "beta PR #N" run, then report
+the prerelease tag `pr-<N>` and its install line:
+
+```sh
+mise use -g github:andycmaj/ghdash@pr-<N>
+```
+
+New pushes to the PR rebuild `pr-<N>`; closing the PR deletes it.

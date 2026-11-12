@@ -10,7 +10,8 @@ import { APP_VERSION } from "../version";
 import { Modal } from "./modal/modal";
 import { ModalHeader } from "./modal/modal-header";
 import { keymap } from "../keymap";
-import { useHelpContext } from "../context/help-context";
+import { useHelpContext, type HelpContext } from "../context/help-context";
+import { SectionKey } from "@/github/types";
 import {
   filterRelevant,
   getScopeBindings,
@@ -26,9 +27,18 @@ interface HelpGroup {
   bindings: HelpBinding[];
 }
 
-const SCOPES = [
+const SCOPES: {
+  scope: string;
+  title: string;
+  when?: (ctx: HelpContext) => boolean;
+}[] = [
   { scope: "app", title: "Global" },
   { scope: "sections", title: "Sections List" },
+  {
+    scope: "tivo",
+    title: "TiVo",
+    when: (ctx) => ctx.activeSection === SectionKey.TiVo,
+  },
   { scope: "content", title: "Content View" },
 ];
 
@@ -47,18 +57,20 @@ export function KeyboardHelp(props: KeyboardHelpProps) {
   let scrollRef: ScrollBoxRenderable | undefined;
 
   const groups = createMemo((): HelpGroup[] =>
-    SCOPES.map(({ scope, title }) => {
-      const seen = new Set<string>();
-      const bindings = filterRelevant(
-        getScopeBindings(keymap, scope),
-        context(),
-      ).filter((b) => {
-        if (seen.has(b.cmd)) return false;
-        seen.add(b.cmd);
-        return true;
-      });
-      return { title, bindings };
-    }),
+    SCOPES.filter(({ when }) => when?.(context()) ?? true).map(
+      ({ scope, title }) => {
+        const seen = new Set<string>();
+        const bindings = filterRelevant(
+          getScopeBindings(keymap, scope),
+          context(),
+        ).filter((b) => {
+          if (seen.has(b.cmd)) return false;
+          seen.add(b.cmd);
+          return true;
+        });
+        return { title, bindings };
+      },
+    ),
   );
 
   const maxHeight = 15;

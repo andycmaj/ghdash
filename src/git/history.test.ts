@@ -75,7 +75,9 @@ describe("getMergeBase", () => {
   test("throws a fetch hint when origin/<baseRef> is missing", async () => {
     const err = await getMergeBase(dir, "release").catch((e: unknown) => e);
     expect(err).toBeInstanceOf(MissingBaseError);
-    expect((err as MissingBaseError).hint).toBe("git fetch origin release");
+    expect(err instanceof MissingBaseError && err.hint).toBe(
+      "git fetch origin release",
+    );
   });
 });
 

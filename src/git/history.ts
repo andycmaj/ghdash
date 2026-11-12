@@ -55,6 +55,21 @@ async function revParse(cwd: string, rev: string): Promise<string | null> {
   return r.stdout.toString().trim() || null;
 }
 
+// Paths in a changeset are relative to the repo root, so every git call runs
+// from there regardless of where ghdash was started.
+export async function getTopLevel(cwd: string): Promise<string | null> {
+  const r = await git(cwd, ["rev-parse", "--show-toplevel"]);
+  if (r.exitCode !== 0) return null;
+  return r.stdout.toString().trim() || null;
+}
+
+export async function getBranch(cwd: string): Promise<string | null> {
+  const r = await git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]);
+  if (r.exitCode !== 0) return null;
+  const branch = r.stdout.toString().trim();
+  return branch && branch !== "HEAD" ? branch : null;
+}
+
 export async function getHead(cwd: string): Promise<string | null> {
   return revParse(cwd, "HEAD");
 }

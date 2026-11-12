@@ -9,6 +9,7 @@ import {
   on,
   onCleanup,
   Match,
+  Show,
   Switch,
 } from "solid-js";
 import { createStore } from "solid-js/store";
@@ -52,6 +53,8 @@ import {
 } from "./sections/actions-section";
 import { MergeabilitySection } from "./sections/mergeability-section";
 import { MergeQueueSection } from "./sections/merge-queue-section";
+import { TivoSection } from "./sections/tivo-section";
+import { useTivo } from "../context/tivo";
 
 const SIDEBAR_WIDTH = 44;
 
@@ -72,6 +75,7 @@ export function SectionView() {
   const openJobLogs = useJobLogs();
   const theme = useTheme();
   const dimensions = useTerminalDimensions();
+  const tivo = useTivo();
 
   let scrollRef: ScrollBoxRenderable | undefined;
 
@@ -222,6 +226,14 @@ export function SectionView() {
       case SectionKey.Mergeability: {
         const blocker = state.mergeBlockers[index];
         return blocker ? { kind: "blocker", blocker } : null;
+      }
+      // TivoSection owns its own cursor; only whether a file is open matters
+      // for the footer.
+      case SectionKey.TiVo: {
+        if (tivo.state.path)
+          return { kind: "tivoPlayer", blame: tivo.state.blame };
+        const file = tivo.state.files[0];
+        return file ? { kind: "tivoFile", file } : null;
       }
       default:
         return null;
@@ -414,6 +426,8 @@ export function SectionView() {
         return "Merge queue";
       case SectionKey.Mergeability:
         return "Mergeability";
+      case SectionKey.TiVo:
+        return tivo.state.baseRef ? `TiVo · vs ${tivo.state.baseRef}` : "TiVo";
       default:
         return "";
     }
@@ -435,59 +449,64 @@ export function SectionView() {
     >
       <PaneHeader title={title()} />
 
-      <scrollbox
-        ref={(r: ScrollBoxRenderable) => (scrollRef = r)}
-        flexGrow={1}
-        paddingLeft={2}
-        paddingRight={1}
-        stickyScroll={false}
+      <Show
+        when={state.selectedSection !== SectionKey.TiVo}
+        fallback={<TivoSection width={bodyWidth()} target={pane.target} />}
       >
-        <Switch>
-          <Match when={state.selectedSection === SectionKey.Info}>
-            <PrInfo
-              width={bodyWidth()}
-              selected={activeCursor}
-              idFor={childId}
-            />
-          </Match>
-          <Match when={state.selectedSection === SectionKey.Feed}>
-            <FeedSection
-              width={bodyWidth()}
-              selected={activeCursor}
-              idFor={childId}
-              nodes={feedNodes}
-              filter={feedFilter}
-            />
-          </Match>
-          <Match when={state.selectedSection === SectionKey.Actions}>
-            <ActionsSection
-              width={bodyWidth()}
-              selected={activeCursor}
-              idFor={childId}
-              nodes={actionsNodes}
-              showAnnotations={showAnnotations}
-              notice={actionsNotice}
-            />
-          </Match>
-          <Match when={state.selectedSection === SectionKey.MergeQueue}>
-            <MergeQueueSection
-              width={bodyWidth()}
-              selected={activeCursor}
-              idFor={childId}
-              nodes={mergeQueueNodes}
-              showAnnotations={showAnnotations}
-              notice={mergeQueueNotice}
-            />
-          </Match>
-          <Match when={state.selectedSection === SectionKey.Mergeability}>
-            <MergeabilitySection
-              width={bodyWidth()}
-              selected={activeCursor}
-              idFor={childId}
-            />
-          </Match>
-        </Switch>
-      </scrollbox>
+        <scrollbox
+          ref={(r: ScrollBoxRenderable) => (scrollRef = r)}
+          flexGrow={1}
+          paddingLeft={2}
+          paddingRight={1}
+          stickyScroll={false}
+        >
+          <Switch>
+            <Match when={state.selectedSection === SectionKey.Info}>
+              <PrInfo
+                width={bodyWidth()}
+                selected={activeCursor}
+                idFor={childId}
+              />
+            </Match>
+            <Match when={state.selectedSection === SectionKey.Feed}>
+              <FeedSection
+                width={bodyWidth()}
+                selected={activeCursor}
+                idFor={childId}
+                nodes={feedNodes}
+                filter={feedFilter}
+              />
+            </Match>
+            <Match when={state.selectedSection === SectionKey.Actions}>
+              <ActionsSection
+                width={bodyWidth()}
+                selected={activeCursor}
+                idFor={childId}
+                nodes={actionsNodes}
+                showAnnotations={showAnnotations}
+                notice={actionsNotice}
+              />
+            </Match>
+            <Match when={state.selectedSection === SectionKey.MergeQueue}>
+              <MergeQueueSection
+                width={bodyWidth()}
+                selected={activeCursor}
+                idFor={childId}
+                nodes={mergeQueueNodes}
+                showAnnotations={showAnnotations}
+                notice={mergeQueueNotice}
+              />
+            </Match>
+            <Match when={state.selectedSection === SectionKey.Mergeability}>
+              <MergeabilitySection
+                width={bodyWidth()}
+                selected={activeCursor}
+                idFor={childId}
+              />
+            </Match>
+          </Switch>
+        </scrollbox>
+      </Show>
 
       <MainFooter />
     </box>

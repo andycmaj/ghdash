@@ -30,6 +30,8 @@ export const keymap: KeymapTable = {
       cmd: Commands.OPEN_LOKI_LOGS,
       desc: "open loki logs",
       help: "logs",
+      // The TiVo player takes `l` for stepping forward.
+      relevant: (ctx) => ctx.selectedItem?.kind !== "tivoPlayer",
     },
     {
       key: "p",
@@ -149,6 +151,68 @@ export const keymap: KeymapTable = {
       help: "job logs",
       relevant: (ctx) => ctx.selectedItem?.kind === "job",
     },
+    { key: "pageup", cmd: Commands.SCROLL_PAGEUP, desc: "pgup" },
+    { key: "pagedown", cmd: Commands.SCROLL_PAGEDOWN, desc: "pgdn" },
+  ],
+
+  // TiVo view, layered over "content" while the TiVo section is shown: the
+  // file list, then the player once a file is open.
+  tivo: [
+    { key: "j", cmd: Commands.NAV_DOWN, desc: "down" },
+    { key: "down", cmd: Commands.NAV_DOWN, desc: "down" },
+    { key: "k", cmd: Commands.NAV_UP, desc: "up" },
+    { key: "up", cmd: Commands.NAV_UP, desc: "up" },
+    { key: "g", cmd: Commands.NAV_TOP, desc: "top" },
+    { key: "shift+g", cmd: Commands.NAV_BOTTOM, desc: "bottom" },
+    {
+      key: "return",
+      cmd: Commands.TIVO_OPEN,
+      desc: "open file in the player",
+      help: "play",
+      relevant: (ctx) => ctx.selectedItem?.kind === "tivoFile",
+    },
+    {
+      key: "h",
+      cmd: Commands.TIVO_PREV,
+      desc: "previous commit",
+      help: "prev",
+      relevant: (ctx) => ctx.selectedItem?.kind === "tivoPlayer",
+    },
+    { key: "left", cmd: Commands.TIVO_PREV, desc: "previous commit" },
+    {
+      key: "l",
+      cmd: Commands.TIVO_NEXT,
+      desc: "next commit",
+      help: "next",
+      relevant: (ctx) => ctx.selectedItem?.kind === "tivoPlayer",
+    },
+    { key: "right", cmd: Commands.TIVO_NEXT, desc: "next commit" },
+    {
+      key: "0",
+      cmd: Commands.TIVO_FIRST,
+      desc: "jump to merge-base",
+    },
+    {
+      key: "$",
+      cmd: Commands.TIVO_LAST,
+      desc: "jump to HEAD",
+    },
+    {
+      key: "b",
+      cmd: Commands.TIVO_BLAME,
+      desc: "toggle blame gutter",
+      help: "blame",
+      relevant: (ctx) => ctx.selectedItem?.kind === "tivoPlayer",
+    },
+    {
+      key: "escape",
+      cmd: Commands.TIVO_BACK,
+      desc: "back to file list",
+      help: "files",
+      relevant: (ctx) => ctx.selectedItem?.kind === "tivoPlayer",
+    },
+    { key: "ctrl+d", cmd: Commands.SCROLL_HALF_DOWN, desc: "half page down" },
+    { key: "ctrl+u", cmd: Commands.SCROLL_HALF_UP, desc: "half page up" },
     { key: "pageup", cmd: Commands.SCROLL_PAGEUP, desc: "pgup" },
     { key: "pagedown", cmd: Commands.SCROLL_PAGEDOWN, desc: "pgdn" },
   ],

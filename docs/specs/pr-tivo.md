@@ -1,6 +1,6 @@
 # Spec: PR TiVo
 
-Status: draft · Owner: @andycmaj · Branch: `feat/pr-tivo`
+Status: implemented · Owner: @andycmaj · Branch: `feat/pr-tivo`
 
 <!--
 Spec style: one markdown file per feature, under docs/specs/.
@@ -39,8 +39,10 @@ visible file content changes in place, with the edited lines animated.
 Entry and file selection
 
 - **R1** A new `TiVo` row appears in the section tree (left pane) whenever the
-  PR has a non-empty changeset. Selecting it shows the TiVo view in the
-  content pane.
+  PR has a non-empty changeset (or a history error to show, see R14), and the
+  local checkout is on the PR's head branch (a PR opened by number from
+  another checkout has no meaningful local history; fixture mode skips this
+  check). Selecting it shows the TiVo view in the content pane.
 - **R2** The TiVo view lists changeset files (path, +/− counts, number of
   commits touching it). `j`/`k` move, `enter` opens a file into the player.
 - **R3** Files added on the branch have a merge-base stop with empty content;
@@ -149,14 +151,17 @@ Data
 
 ## Plan
 
-- [ ] `git/history.ts` + tests (R3, R14, R15, R17)
-- [ ] `tivo/line-diff.ts` + tests (R9)
-- [ ] `tivo/animation.ts` + tests (R9, R10)
-- [ ] `tivo/blame.ts` + tests (R19)
-- [ ] `context/tivo.tsx` store (R5, R7, R13, R16, R18)
-- [ ] section tree row + `SectionKey.TiVo` (R1)
-- [ ] file list view (R2)
-- [ ] player: timeline bar + header (R4, R6), content + scroll (R8, R11, R12)
-- [ ] blame gutter (R18)
-- [ ] keymap + help entries (R5, R13, R18)
-- [ ] tmux-driven manual check on a real multi-commit PR
+- [x] `git/history.ts` + tests (R3, R14, R15, R17)
+- [x] `tivo/line-diff.ts` + tests (R9)
+- [x] `tivo/animation.ts` + tests (R9, R10)
+- [x] `tivo/blame.ts` + tests (R19)
+- [x] `context/tivo.tsx` store (R5, R7, R13, R16, R18)
+- [x] section tree row + `SectionKey.TiVo` (R1)
+- [x] file list view (R2)
+- [x] player: timeline bar + header (R4, R6), content + scroll (R8, R11, R12)
+- [x] blame gutter (R18)
+- [x] keymap + help entries (R5, R13, R18)
+- [x] tmux-driven manual check on a real multi-commit PR (scratch repo with
+      edits, an added and a deleted file, a base merge, a 6k-line file, a
+      missing `origin/<base>`, and a new commit picked up by `r`; run in
+      fixture mode)

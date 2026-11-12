@@ -85,6 +85,6 @@ describe("diffLines", () => {
 describe("changedLines", () => {
   test("collects new-side indexes of adds and modifies", () => {
     const ops = diffLines(["a", "b", "c"], ["a", "B", "c", "d"]);
-    expect([...changedLines(ops)].sort()).toEqual([1, 3]);
+    expect([...changedLines(ops)].sort((x, y) => x - y)).toEqual([1, 3]);
   });
 });

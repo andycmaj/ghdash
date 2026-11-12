@@ -6,7 +6,9 @@ import {
   PRStatus,
   type CheckRun,
   type MergeBlocker,
+  type CodeOwnerGroup,
   type PullRequest,
+  type ReviewStatus,
   type ReviewThread,
 } from "./types";
 
@@ -213,11 +215,14 @@ export function groupChecksByWorkflow(checks: CheckRun[]): WorkflowGroup[] {
 }
 
 // Derive the merge-blocker checklist from the PR, its checks and review threads.
-// A blocker with satisfied=false is actively blocking the merge.
+// A blocker with satisfied=false is actively blocking the merge. With an
+// inferred review status, review rows come from it instead of GitHub's
+// reviewDecision.
 export function computeMergeBlockers(
   pr: PullRequest,
   checks: CheckRun[],
   reviewThreads: ReviewThread[],
+  review?: ReviewStatus | null,
 ): MergeBlocker[] {
   const blockers: MergeBlocker[] = [];
 
@@ -239,7 +244,9 @@ export function computeMergeBlockers(
   const reviewApproved = pr.reviewDecision === "APPROVED";
   const reviewChanges = pr.reviewDecision === "CHANGES_REQUESTED";
   const reviewRequired = pr.reviewDecision === "REVIEW_REQUIRED";
-  if (reviewChanges || reviewRequired || reviewApproved) {
+  if (review) {
+    if (review.required) blockers.push(...reviewBlockers(review));
+  } else if (reviewChanges || reviewRequired || reviewApproved) {
     // Name who we're still waiting on so an unsatisfied review requirement is
     // actionable (e.g. "waiting on octo-org/platform-reviewers") instead
     // of a bare "review required".
@@ -294,4 +301,125 @@ export function computeMergeBlockers(
   }
 
   return blockers;
+}
+
+const MAX_NAMES = 5;
+
+function names(list: string[]): string {
+  const shown = list.slice(0, MAX_NAMES).join(", ");
+  const more = list.length - MAX_NAMES;
+  return more > 0 ? `${shown} +${more}` : shown;
+}
+
+function at(logins: string[]): string[] {
+  return logins.map((l) => `@${l}`);
+}
+
+const MAX_PATH_SEGMENTS = 3;
+
+// Where a group's files live: the single file, or their common directory,
+// trimmed to its last few segments so the row stays readable.
+function pathSummary(paths: string[]): string {
+  if (paths.length === 0) return "";
+  const split = paths.map((p) => p.split("/"));
+  let segments: string[];
+  if (paths.length === 1) {
+    segments = split[0] ?? [];
+  } else {
+    segments = [];
+    const first = split[0] ?? [];
+    // The last segment is a file name, never part of a common directory.
+    for (let i = 0; i < first.length - 1; i++) {
+      if (!split.every((s) => s.length - 1 > i && s[i] === first[i])) break;
+      segments.push(first[i]);
+    }
+  }
+  const trimmed =
+    segments.length > MAX_PATH_SEGMENTS
+      ? ["…", ...segments.slice(-MAX_PATH_SEGMENTS)]
+      : segments;
+  const where =
+    paths.length === 1
+      ? trimmed.join("/")
+      : `${segments.length ? `${trimmed.join("/")}/` : ""}, ${paths.length} files`;
+  return ` (${where.replace(/^, /, "")})`;
+}
+
+function groupBlocker(group: CodeOwnerGroup): MergeBlocker {
+  const owners = group.owners.join(" or ");
+  const where = pathSummary(group.paths);
+  if (group.satisfied) {
+    return {
+      kind: MergeBlockerKind.RequiredReview,
+      description: `${owners} approved by ${names(at(group.approvedBy))}${where}`,
+      satisfied: true,
+    };
+  }
+  const who =
+    group.candidates === null
+      ? "team members not visible"
+      : group.candidates.length === 0
+        ? "no eligible reviewer besides the author"
+        : `one of ${names(at(group.candidates))}`;
+  return {
+    kind: MergeBlockerKind.RequiredReview,
+    description: `Needs approval from ${owners}${where} — ${who}`,
+    satisfied: false,
+  };
+}
+
+// The review rows: required approval count, one row per code-owner group, and
+// any outstanding change requests. Where this disagrees with GitHub's own
+// reviewDecision, the first row says so.
+function reviewBlockers(review: ReviewStatus): MergeBlocker[] {
+  const rows: MergeBlocker[] = [];
+
+  if (review.requiredApprovals > 0) {
+    const have = review.approvedBy.length;
+    const need = review.requiredApprovals;
+    const enough = have >= need;
+    const by = have > 0 ? ` by ${names(at(review.approvedBy))}` : "";
+    const waiting =
+      !enough && review.otherRequests.length > 0
+        ? ` — waiting on ${names(review.otherRequests.map((r) => r.name))}`
+        : "";
+    rows.push({
+      kind: MergeBlockerKind.RequiredReview,
+      description: enough
+        ? `Approved${by} (${need} required)`
+        : `${have} of ${need} required approval${need === 1 ? "" : "s"}${by}${waiting}`,
+      satisfied: enough,
+    });
+  }
+
+  rows.push(...review.codeOwnerGroups.map(groupBlocker));
+
+  if (review.changesRequestedBy.length > 0) {
+    rows.push({
+      kind: MergeBlockerKind.RequiredReview,
+      description: `Changes requested by ${names(at(review.changesRequestedBy))}`,
+      satisfied: false,
+    });
+  }
+
+  const notes: string[] = [];
+  if (!review.complete)
+    notes.push("CODEOWNERS or changed files not fully read");
+  if (review.githubDecision === "APPROVED" && !review.satisfied) {
+    notes.push("GitHub reports approved");
+  } else if (
+    review.githubDecision !== null &&
+    review.githubDecision !== "APPROVED" &&
+    review.satisfied
+  ) {
+    notes.push(
+      `GitHub still reports ${review.githubDecision.toLowerCase().replace("_", " ")}`,
+    );
+  }
+  const first = rows[0];
+  if (first && notes.length > 0) {
+    first.description += ` · ${notes.join("; ")}`;
+  }
+
+  return rows;
 }

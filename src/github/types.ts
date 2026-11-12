@@ -155,6 +155,41 @@ export interface ReviewRequest {
   // "octo-org/platform-reviewers"), "@login" for an individual.
   name: string;
   isTeam: boolean;
+  // Requested automatically because the reviewer owns changed files.
+  asCodeOwner: boolean;
+}
+
+// What the review requirement actually is, worked out from CODEOWNERS, team
+// membership and who has approved, rather than from GitHub's reviewDecision
+// (which drops a team's request as soon as any member reviews, and never says
+// which owners are still missing).
+export interface ReviewStatus {
+  // Whether any review is required at all; nothing below blocks when false.
+  required: boolean;
+  requiredApprovals: number;
+  // Logins (with write access) whose latest review approves.
+  approvedBy: string[];
+  changesRequestedBy: string[];
+  codeOwnerGroups: CodeOwnerGroup[];
+  // Requested reviewers who haven't responded and don't own any changed file.
+  otherRequests: ReviewRequest[];
+  // False when CODEOWNERS or the changed-file list couldn't be read in full,
+  // so the code-owner groups may be incomplete.
+  complete: boolean;
+  satisfied: boolean;
+  githubDecision: ReviewDecision;
+}
+
+// One set of changed files that needs approval from any one of `owners`.
+export interface CodeOwnerGroup {
+  // "@login" or "org/team-slug", as written in CODEOWNERS.
+  owners: string[];
+  paths: string[];
+  approvedBy: string[];
+  // Who could still approve for this group (owners and team members, minus
+  // the PR author); null when a team's membership isn't visible to us.
+  candidates: string[] | null;
+  satisfied: boolean;
 }
 
 export interface PullRequest {

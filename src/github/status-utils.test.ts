@@ -17,6 +17,7 @@ import {
   type CheckRun,
   type MergeBlocker,
   type PullRequest,
+  type ReviewStatus,
   type ReviewThread,
 } from "./types";
 
@@ -260,8 +261,12 @@ describe("computeMergeBlockers", () => {
       makePR({
         reviewDecision: "REVIEW_REQUIRED",
         reviewRequests: [
-          { name: "octo-org/platform-reviewers", isTeam: true },
-          { name: "@octocat", isTeam: false },
+          {
+            name: "octo-org/platform-reviewers",
+            isTeam: true,
+            asCodeOwner: true,
+          },
+          { name: "@octocat", isTeam: false, asCodeOwner: false },
         ],
       }),
       [],
@@ -299,6 +304,113 @@ describe("computeMergeBlockers", () => {
   });
 });
 
+describe("computeMergeBlockers with inferred review status", () => {
+  function status(over: Partial<ReviewStatus> = {}): ReviewStatus {
+    return {
+      required: true,
+      requiredApprovals: 1,
+      approvedBy: [],
+      changesRequestedBy: [],
+      codeOwnerGroups: [],
+      otherRequests: [],
+      complete: true,
+      satisfied: false,
+      githubDecision: "REVIEW_REQUIRED",
+      ...over,
+    };
+  }
+
+  function reviewRows(review: ReviewStatus): MergeBlocker[] {
+    return computeMergeBlockers(makePR(), [], [], review).filter(
+      (b) => b.kind === MergeBlockerKind.RequiredReview,
+    );
+  }
+
+  test("names the missing team and who can still approve", () => {
+    const rows = reviewRows(
+      status({
+        approvedBy: ["alice"],
+        codeOwnerGroups: [
+          {
+            owners: ["octo-org/platform"],
+            paths: ["src/app.ts"],
+            approvedBy: ["alice"],
+            candidates: ["alice"],
+            satisfied: true,
+          },
+          {
+            owners: ["octo-org/payments", "@carol"],
+            paths: ["src/payments/a.ts", "src/payments/b.ts"],
+            approvedBy: [],
+            candidates: ["bob", "carol"],
+            satisfied: false,
+          },
+        ],
+      }),
+    );
+    expect(rows.map((r) => [r.satisfied, r.description])).toEqual([
+      [true, "Approved by @alice (1 required)"],
+      [true, "octo-org/platform approved by @alice (src/app.ts)"],
+      [
+        false,
+        "Needs approval from octo-org/payments or @carol (src/payments/, 2 files) — one of @bob, @carol",
+      ],
+    ]);
+  });
+
+  test("says when team members aren't visible", () => {
+    const [row] = reviewRows(
+      status({
+        requiredApprovals: 0,
+        codeOwnerGroups: [
+          {
+            owners: ["octo-org/secret"],
+            paths: [],
+            approvedBy: [],
+            candidates: null,
+            satisfied: false,
+          },
+        ],
+        complete: false,
+      }),
+    );
+    expect(row?.description).toBe(
+      "Needs approval from octo-org/secret — team members not visible · CODEOWNERS or changed files not fully read",
+    );
+  });
+
+  test("flags disagreement with GitHub's decision", () => {
+    const [approved] = reviewRows(
+      status({ approvedBy: ["a"], satisfied: true }),
+    );
+    expect(approved?.description).toBe(
+      "Approved by @a (1 required) · GitHub still reports review required",
+    );
+    const [blocked] = reviewRows(status({ githubDecision: "APPROVED" }));
+    expect(blocked?.satisfied).toBe(false);
+    expect(blocked?.description).toBe(
+      "0 of 1 required approval · GitHub reports approved",
+    );
+  });
+
+  test("lists pending non-owner reviewers and change requests", () => {
+    const rows = reviewRows(
+      status({
+        otherRequests: [{ name: "@dave", isTeam: false, asCodeOwner: false }],
+        changesRequestedBy: ["bob"],
+      }),
+    );
+    expect(rows.map((r) => r.description)).toEqual([
+      "0 of 1 required approval — waiting on @dave",
+      "Changes requested by @bob",
+    ]);
+  });
+
+  test("no review rows when nothing is required", () => {
+    expect(reviewRows(status({ required: false }))).toEqual([]);
+  });
+});
+
 describe("actionsJobId", () => {
   test("parses the job id from an Actions details URL", () => {
     expect(actionsJobId("https://github.com/o/r/actions/runs/1/job/10")).toBe(
@@ -311,5 +423,47 @@ describe("actionsJobId", () => {
   test("returns null for non-Actions checks", () => {
     expect(actionsJobId("https://ci.example.com/build/5")).toBeNull();
     expect(actionsJobId("https://github.com/o/r/actions/runs/1")).toBeNull();
+  });
+});
+
+describe("code owner path summary", () => {
+  function row(paths: string[]): string | undefined {
+    return computeMergeBlockers(makePR(), [], [], {
+      required: true,
+      requiredApprovals: 0,
+      approvedBy: [],
+      changesRequestedBy: [],
+      codeOwnerGroups: [
+        {
+          owners: ["o/t"],
+          paths,
+          approvedBy: [],
+          candidates: [],
+          satisfied: false,
+        },
+      ],
+      otherRequests: [],
+      complete: true,
+      satisfied: false,
+      githubDecision: "REVIEW_REQUIRED",
+    }).find((b) => b.kind === MergeBlockerKind.RequiredReview)?.description;
+  }
+
+  test("trims a long common directory", () => {
+    expect(row(["a/b/c/d/e/x.ts", "a/b/c/d/e/f/y.ts"])).toBe(
+      "Needs approval from o/t (…/c/d/e/, 2 files) — no eligible reviewer besides the author",
+    );
+  });
+
+  test("shows only a count when files share no directory", () => {
+    expect(row(["a.ts", "lib/b.ts"])).toBe(
+      "Needs approval from o/t (2 files) — no eligible reviewer besides the author",
+    );
+  });
+
+  test("trims a single deep file", () => {
+    expect(row(["a/b/c/d.ts"])).toBe(
+      "Needs approval from o/t (…/b/c/d.ts) — no eligible reviewer besides the author",
+    );
   });
 });

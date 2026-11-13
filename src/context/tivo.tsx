@@ -54,6 +54,9 @@ interface TivoContextValue {
   state: TivoState;
   open: (path: string) => void;
   close: () => void;
+  // Open the changed file before/after the open one; false at either end.
+  openSibling: (delta: 1 | -1) => boolean;
+  sibling: (delta: 1 | -1) => ChangedFile | undefined;
   step: (delta: number) => void;
   seek: (index: number) => void;
   toggleBlame: () => void;
@@ -292,6 +295,19 @@ export function TivoProvider(props: ParentProps) {
     void loadTimeline(path, false);
   }
 
+  function sibling(delta: 1 | -1): ChangedFile | undefined {
+    const i = state.files.findIndex((f) => f.path === state.path);
+    if (i < 0) return undefined;
+    return state.files[i + delta];
+  }
+
+  function openSibling(delta: 1 | -1): boolean {
+    const file = sibling(delta);
+    if (!file) return false;
+    open(file.path);
+    return true;
+  }
+
   function close() {
     setState({ path: null, stops: [], playhead: 0, timelineLoading: false });
     setUnplayable(null);
@@ -324,6 +340,8 @@ export function TivoProvider(props: ParentProps) {
         state,
         open,
         close,
+        openSibling,
+        sibling,
         step,
         seek,
         toggleBlame,

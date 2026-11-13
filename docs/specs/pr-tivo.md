@@ -95,6 +95,20 @@ Blame
   and updates as the playhead moves. Blame state persists across steps and
   file switches.
 
+Navigation
+
+- **R20** `]` / `[` jump to the next / previous hunk the playhead commit
+  changed (diff of the previous stop → playhead), landing it in the top
+  third. From the top of the file `]` starts at the first hunk. A toast says
+  when there are no more.
+- **R21** `>` / `<` open the next / previous changed file in the player (at
+  HEAD, per R7); the file list cursor follows, so `esc` returns to it.
+- **R22** The player header shows the previous and next changed files beside
+  the open one, with their `<` / `>` keys. The footer folds each prev/next
+  pair into one hint (`h/l commit · [/] hunk · </> file`) and drops global
+  hints that don't apply in the player (open, copy link, my PRs,
+  draft/ready, logs).
+
 Data
 
 - **R14** All history comes from local git via `Bun.$` (no GitHub API).
@@ -161,6 +175,7 @@ Data
 - [x] player: timeline bar + header (R4, R6), content + scroll (R8, R11, R12)
 - [x] blame gutter (R18)
 - [x] keymap + help entries (R5, R13, R18)
+- [x] hunk and file navigation, header siblings, compact footer (R20–R22)
 - [x] tmux-driven manual check on a real multi-commit PR (scratch repo with
       edits, an added and a deleted file, a base merge, a 6k-line file, a
       missing `origin/<base>`, and a new commit picked up by `r`; run in

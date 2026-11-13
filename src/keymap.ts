@@ -38,18 +38,24 @@ export const keymap: KeymapTable = {
       cmd: Commands.OPEN_PR_LIST,
       desc: "open one of my PRs",
       help: "my PRs",
+      // Footer room for the TiVo player's own keys.
+      relevant: (ctx) => ctx.selectedItem?.kind !== "tivoPlayer",
     },
     {
       key: "y",
       cmd: Commands.COPY_LINK,
       desc: "copy PR link",
       help: "copy link",
+      // Footer room for the TiVo player's own keys.
+      relevant: (ctx) => ctx.selectedItem?.kind !== "tivoPlayer",
     },
     {
       key: "d",
       cmd: Commands.TOGGLE_DRAFT,
       desc: "toggle draft/ready",
       help: "draft/ready",
+      // Footer room for the TiVo player's own keys.
+      relevant: (ctx) => ctx.selectedItem?.kind !== "tivoPlayer",
     },
     { key: "?", cmd: Commands.HELP_OPEN, desc: "keyboard help", help: "help" },
   ],
@@ -86,6 +92,7 @@ export const keymap: KeymapTable = {
       cmd: Commands.OPEN_IN_BROWSER,
       desc: "open in browser",
       help: "open",
+      relevant: (ctx) => ctx.selectedItem?.kind !== "tivoPlayer",
     },
     {
       key: "return",
@@ -143,6 +150,7 @@ export const keymap: KeymapTable = {
       cmd: Commands.COPY_LINK,
       desc: "copy link to selected item",
       help: "copy link",
+      relevant: (ctx) => ctx.selectedItem?.kind !== "tivoPlayer",
     },
     {
       key: "shift+l",
@@ -175,7 +183,7 @@ export const keymap: KeymapTable = {
       key: "h",
       cmd: Commands.TIVO_PREV,
       desc: "previous commit",
-      help: "prev",
+      help: "commit",
       relevant: (ctx) => ctx.selectedItem?.kind === "tivoPlayer",
     },
     { key: "left", cmd: Commands.TIVO_PREV, desc: "previous commit" },
@@ -187,6 +195,34 @@ export const keymap: KeymapTable = {
       relevant: (ctx) => ctx.selectedItem?.kind === "tivoPlayer",
     },
     { key: "right", cmd: Commands.TIVO_NEXT, desc: "next commit" },
+    {
+      key: "[",
+      cmd: Commands.TIVO_HUNK_PREV,
+      desc: "previous change in this commit",
+      help: "hunk",
+      relevant: (ctx) => ctx.selectedItem?.kind === "tivoPlayer",
+    },
+    {
+      key: "]",
+      cmd: Commands.TIVO_HUNK_NEXT,
+      desc: "next change in this commit",
+      help: "next hunk",
+      relevant: (ctx) => ctx.selectedItem?.kind === "tivoPlayer",
+    },
+    {
+      key: "<",
+      cmd: Commands.TIVO_FILE_PREV,
+      desc: "previous changed file",
+      help: "file",
+      relevant: (ctx) => ctx.selectedItem?.kind === "tivoPlayer",
+    },
+    {
+      key: ">",
+      cmd: Commands.TIVO_FILE_NEXT,
+      desc: "next changed file",
+      help: "next file",
+      relevant: (ctx) => ctx.selectedItem?.kind === "tivoPlayer",
+    },
     {
       key: "0",
       cmd: Commands.TIVO_FIRST,

@@ -33,7 +33,14 @@ import {
   type FrameRow,
   type Tone,
 } from "@/tivo/animation";
-import { changedLines, diffLines, type DiffOp } from "@/tivo/line-diff";
+import {
+  adjacentHunk,
+  changedLines,
+  diffLines,
+  hunkStarts,
+  type DiffOp,
+} from "@/tivo/line-diff";
+import { useToast } from "@/context/toast";
 import { layoutRail, type RailStyle } from "@/tivo/rail";
 import type { Snapshot } from "@/tivo/blame";
 import type { Theme } from "@/theme/theme";
@@ -61,12 +68,19 @@ function rowBackground(theme: Theme, row: FrameRow): string | undefined {
 
 const expandTabs = (text: string) => text.replace(/\t/g, "  ");
 
+// Paths lose their leading directories first; the file name matters most.
+function truncateStart(text: string, max: number): string {
+  if (max <= 1) return text.slice(-Math.max(0, max));
+  return text.length <= max ? text : `…${text.slice(text.length - max + 1)}`;
+}
+
 export function TivoSection(props: {
   width: number;
   target: () => Renderable | undefined;
 }) {
   const tivo = useTivo();
   const theme = useTheme();
+  const { showToast } = useToast();
 
   const [height, setHeight] = createSignal(20);
   let viewport: Renderable | undefined;
@@ -203,6 +217,59 @@ export function TivoSection(props: {
   });
 
   // Lines changed between merge-base and the playhead stay marked in the gutter.
+  // Where this commit's changes start, for `[` / `]`. The last jump target is
+  // remembered so a hunk near the end (where scrolling clamps) isn't re-found.
+  const hunks = createMemo(() => {
+    const s = shown();
+    if (!s || s.index === 0) return [];
+    const prev = tivo.snapshot(s.index - 1);
+    if (prev === undefined) return [];
+    return hunkStarts(diffLines(prev ?? [], s.lines ?? []));
+  });
+  let lastHunk: { line: number; top: number } | null = null;
+  createEffect(on(shown, () => (lastHunk = null)));
+
+  function jumpHunk(direction: 1 | -1) {
+    const third = Math.floor(height() / 3);
+    // Any scroll since the last jump makes the viewport the reference again.
+    const from =
+      lastHunk && lastHunk.top === top()
+        ? lastHunk.line
+        : top() === 0
+          ? -1
+          : top() + third;
+    const target = adjacentHunk(hunks(), from, direction);
+    if (target === null) {
+      showToast(
+        hunks().length === 0
+          ? "No changes in this commit"
+          : direction > 0
+            ? "Last change in this commit"
+            : "First change in this commit",
+        1200,
+      );
+      return;
+    }
+    scrollTo(target - third);
+    lastHunk = { line: target, top: top() };
+  }
+
+  function openSibling(direction: 1 | -1) {
+    if (!tivo.openSibling(direction))
+      showToast(direction > 0 ? "Last file" : "First file", 1200);
+  }
+
+  // Keep the list cursor on the open file, so esc returns to it.
+  createEffect(
+    on(
+      () => tivo.state.path,
+      (path) => {
+        const i = tivo.state.files.findIndex((f) => f.path === path);
+        if (i >= 0) moveCursor(i);
+      },
+    ),
+  );
+
   const touched = createMemo(() => {
     const s = shown();
     const base = tivo.snapshot(0);
@@ -271,6 +338,12 @@ export function TivoSection(props: {
       [Commands.TIVO_FIRST]: () => tivo.seek(0),
       [Commands.TIVO_LAST]: () => tivo.seek(tivo.state.stops.length - 1),
       [Commands.TIVO_BLAME]: () => tivo.toggleBlame(),
+      [Commands.TIVO_HUNK_NEXT]: () => jumpHunk(1),
+      [Commands.TIVO_HUNK_PREV]: () => jumpHunk(-1),
+      [Commands.TIVO_FILE_NEXT]: () =>
+        inPlayer() ? openSibling(1) : moveCursor(cursor() + 1),
+      [Commands.TIVO_FILE_PREV]: () =>
+        inPlayer() ? openSibling(-1) : moveCursor(cursor() - 1),
     },
     { target: props.target, priority: 1 },
   );
@@ -505,6 +578,9 @@ export function TivoSection(props: {
         </For>
       </box>
     );
+    // Neighbouring files get a quarter of the width each, the open file the rest.
+    const sideWidth = () => Math.max(8, Math.floor(p.width / 4));
+    const centreWidth = () => Math.max(10, p.width - sideWidth() * 2 - 16);
     return (
       <box flexDirection="column" marginBottom={1}>
         <box
@@ -512,15 +588,50 @@ export function TivoSection(props: {
           justifyContent="space-between"
           marginBottom={1}
         >
-          <text fg={theme.text} attributes={1}>
-            {truncate(tivo.state.path ?? "", Math.max(10, p.width - 24))}
-          </text>
-          <text fg={theme.textMuted}>
-            {tivo.state.playhead === 0
-              ? "base"
-              : `${tivo.state.playhead}/${tivo.state.stops.length - 1}`}
-            {tivo.state.blame ? " · blame" : ""}
-          </text>
+          <box flexDirection="row" gap={1} width={sideWidth()}>
+            <Show when={tivo.sibling(-1)}>
+              {(prev) => (
+                <>
+                  <text fg={theme.primary} attributes={1}>
+                    {"<"}
+                  </text>
+                  <text fg={theme.textMuted}>
+                    {truncateStart(prev().path, sideWidth() - 2)}
+                  </text>
+                </>
+              )}
+            </Show>
+          </box>
+          <box flexDirection="row" gap={1}>
+            <text fg={theme.text} attributes={1}>
+              {truncateStart(tivo.state.path ?? "", centreWidth())}
+            </text>
+            <text fg={theme.textMuted}>
+              {tivo.state.playhead === 0
+                ? "base"
+                : `${tivo.state.playhead}/${tivo.state.stops.length - 1}`}
+              {tivo.state.blame ? " · blame" : ""}
+            </text>
+          </box>
+          <box
+            flexDirection="row"
+            gap={1}
+            width={sideWidth()}
+            justifyContent="flex-end"
+          >
+            <Show when={tivo.sibling(1)}>
+              {(next) => (
+                <>
+                  <text fg={theme.textMuted}>
+                    {truncateStart(next().path, sideWidth() - 2)}
+                  </text>
+                  <text fg={theme.primary} attributes={1}>
+                    {">"}
+                  </text>
+                </>
+              )}
+            </Show>
+          </box>
         </box>
         <RailRow runs={rail().labels} />
         <RailRow runs={rail().track} />

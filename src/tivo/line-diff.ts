@@ -138,3 +138,33 @@ export function changedLines(ops: DiffOp[]): Set<number> {
 export function isChange(op: DiffOp): boolean {
   return op.kind !== "same";
 }
+
+// New-snapshot line where each hunk (run of non-same ops) starts; a pure
+// removal starts at the line that now follows it.
+export function hunkStarts(ops: DiffOp[]): number[] {
+  const starts: number[] = [];
+  let inHunk = false;
+  let bNext = 0;
+  for (const op of ops) {
+    if (op.kind === "same") inHunk = false;
+    else if (!inHunk) {
+      inHunk = true;
+      starts.push(op.kind === "remove" ? bNext : op.b);
+    }
+    if (op.kind !== "remove") bNext = op.b + 1;
+  }
+  return starts;
+}
+
+// The hunk to jump to from `from`, or null when there are none that way.
+export function adjacentHunk(
+  starts: number[],
+  from: number,
+  direction: 1 | -1,
+): number | null {
+  if (direction > 0) return starts.find((s) => s > from) ?? null;
+  for (let i = starts.length - 1; i >= 0; i--) {
+    if (starts[i] < from) return starts[i];
+  }
+  return null;
+}

@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { changedLines, diffLines, type DiffOp } from "./line-diff";
+import {
+  adjacentHunk,
+  changedLines,
+  diffLines,
+  hunkStarts,
+  type DiffOp,
+} from "./line-diff";
 
 // Apply ops to recover both sides; any valid diff must round-trip.
 function sides(ops: DiffOp[]): { a: string[]; b: string[] } {
@@ -86,5 +92,36 @@ describe("changedLines", () => {
   test("collects new-side indexes of adds and modifies", () => {
     const ops = diffLines(["a", "b", "c"], ["a", "B", "c", "d"]);
     expect([...changedLines(ops)].sort((x, y) => x - y)).toEqual([1, 3]);
+  });
+});
+
+describe("hunkStarts", () => {
+  test("one start per run of changes, at its new-side line", () => {
+    const a = ["1", "2", "3", "4", "5", "6", "7"];
+    const b = ["1", "TWO", "3", "4", "6", "7", "8"];
+    // modify at 1, removal of "5" (now before line 4), add at 6.
+    expect(hunkStarts(diffLines(a, b))).toEqual([1, 4, 6]);
+  });
+
+  test("adjacent changes form a single hunk", () => {
+    expect(hunkStarts(diffLines(["a", "b"], ["A", "B", "c"]))).toEqual([0]);
+  });
+
+  test("no changes, no hunks", () => {
+    expect(hunkStarts(diffLines(["a"], ["a"]))).toEqual([]);
+  });
+});
+
+describe("adjacentHunk", () => {
+  const starts = [3, 10, 20];
+  test("finds the next hunk strictly after", () => {
+    expect(adjacentHunk(starts, 0, 1)).toBe(3);
+    expect(adjacentHunk(starts, 10, 1)).toBe(20);
+    expect(adjacentHunk(starts, 20, 1)).toBeNull();
+  });
+  test("finds the previous hunk strictly before", () => {
+    expect(adjacentHunk(starts, 25, -1)).toBe(20);
+    expect(adjacentHunk(starts, 10, -1)).toBe(3);
+    expect(adjacentHunk(starts, 3, -1)).toBeNull();
   });
 });

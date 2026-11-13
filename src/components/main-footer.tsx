@@ -7,6 +7,25 @@ import { useFocus } from "../context/focus";
 import { useHelpContext } from "../context/help-context";
 import { useTheme } from "@/hooks/useTheme";
 import { useHelpItems } from "../keyboard/keymap-utils";
+import { Commands } from "../commands";
+
+// Prev/next pairs share one footer slot ("h/l commit") to keep it short.
+const FOOTER_ITEM_OPTIONS = {
+  combinedKeys: {
+    [Commands.NAV_DOWN]: "j/k",
+    [Commands.NAV_TOP]: "g/G",
+    [Commands.TIVO_PREV]: "h/l",
+    [Commands.TIVO_HUNK_PREV]: "[/]",
+    [Commands.TIVO_FILE_PREV]: "</>",
+  },
+  skipCommands: new Set<string>([
+    Commands.NAV_UP,
+    Commands.NAV_BOTTOM,
+    Commands.TIVO_NEXT,
+    Commands.TIVO_HUNK_NEXT,
+    Commands.TIVO_FILE_NEXT,
+  ]),
+};
 
 export function MainFooter() {
   const { sidebarVisible } = useFocus();
@@ -25,7 +44,7 @@ export function MainFooter() {
 
   // Help items from the bindings reachable in the active pane, limited to
   // those relevant to the active section and selected item
-  const allHelpItems = useHelpItems(context);
+  const allHelpItems = useHelpItems(context, FOOTER_ITEM_OPTIONS);
 
   // When the content pane is narrow (< 80 chars), show only the help shortcut
   const helpItems = createMemo(() => {

@@ -258,5 +258,6 @@ export const SectionKey = {
   Actions: "actions",
   MergeQueue: "merge-queue",
   Mergeability: "mergeability",
+  TiVo: "tivo",
 } as const;
 export type SectionKey = (typeof SectionKey)[keyof typeof SectionKey];

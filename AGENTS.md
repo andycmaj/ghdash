@@ -73,6 +73,11 @@ layer, so keys only ever reach one handler.
   right pane `components/section-view.tsx` (the selected section's content).
   Feed rows (thread grouping, filter, collapse) come from
   `components/sections/feed-model.ts`.
+- TiVo (`docs/specs/pr-tivo.md`): scrub one changed file through the PR's
+  commits. Local git only (`src/git/history.ts`); pure diff/animation/blame in
+  `src/tivo/`; store in `context/tivo.tsx`; view in
+  `components/sections/tivo-section.tsx`, which renders its own viewport and
+  layers a `tivo` key scope over `content`.
 - Embedded terminal: `src/terminal/` + `context/terminal.tsx` +
   `components/terminal-pane.tsx` (ported from kube-tui, ghostty-opentui PTY).
   Replaces the content pane while open; used to view job logs in `$EDITOR`.

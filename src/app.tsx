@@ -22,6 +22,7 @@ import { SectionTree } from "./components/section-tree";
 import { SectionView } from "./components/section-view";
 import { TerminalPane } from "./components/terminal-pane";
 import { TerminalProvider, useTerminal } from "./context/terminal";
+import { TivoProvider } from "./context/tivo";
 import { SectionPicker } from "./components/section-picker";
 import {
   CommandPalette,
@@ -259,22 +260,24 @@ export function App(props: AppProps) {
         tokenOverride={props.tokenOverride}
         prSpec={props.prSpec}
       >
-        <FocusProvider panes={["sections", "content"]}>
-          <ToastProvider>
-            <KeymapProvider keymap={keymap}>
-              <HelpContextProvider>
-                <TerminalProvider>
-                  <ReplyProvider>
-                    <DescriptionEditProvider>
-                      <AppContent />
-                      <Toast />
-                    </DescriptionEditProvider>
-                  </ReplyProvider>
-                </TerminalProvider>
-              </HelpContextProvider>
-            </KeymapProvider>
-          </ToastProvider>
-        </FocusProvider>
+        <TivoProvider>
+          <FocusProvider panes={["sections", "content"]}>
+            <ToastProvider>
+              <KeymapProvider keymap={keymap}>
+                <HelpContextProvider>
+                  <TerminalProvider>
+                    <ReplyProvider>
+                      <DescriptionEditProvider>
+                        <AppContent />
+                        <Toast />
+                      </DescriptionEditProvider>
+                    </ReplyProvider>
+                  </TerminalProvider>
+                </HelpContextProvider>
+              </KeymapProvider>
+            </ToastProvider>
+          </FocusProvider>
+        </TivoProvider>
       </GithubProvider>
     </ThemeProvider>
   );

@@ -3,6 +3,7 @@
 
 import { createMemo, type Accessor } from "solid-js";
 import { useGithub } from "../context/github";
+import { useTivo } from "../context/tivo";
 import { useTheme } from "@/hooks/useTheme";
 import { checksVerdict } from "@/github/status-utils";
 import { checkStatusColor, checkStatusIcon } from "@/theme/theme";
@@ -18,15 +19,24 @@ const ALL_SECTIONS: SectionDef[] = [
   { key: SectionKey.Actions, label: "Actions" },
   { key: SectionKey.MergeQueue, label: "Merge queue" },
   { key: SectionKey.Mergeability, label: "Mergeability" },
+  { key: SectionKey.TiVo, label: "TiVo" },
 ];
 
-// The sections available for the current PR; Merge queue only while queued.
+// The sections available for the current PR; Merge queue only while queued,
+// TiVo only when local history has a changeset (or an error worth showing).
 export function useSections(): Accessor<SectionDef[]> {
   const { state } = useGithub();
+  const tivo = useTivo();
   return createMemo(() =>
-    ALL_SECTIONS.filter(
-      (s) => s.key !== SectionKey.MergeQueue || !!state.pr?.mergeQueue,
-    ),
+    ALL_SECTIONS.filter((s) => {
+      if (s.key === SectionKey.MergeQueue) return !!state.pr?.mergeQueue;
+      if (s.key === SectionKey.TiVo)
+        return (
+          tivo.state.available &&
+          (tivo.state.files.length > 0 || !!tivo.state.error)
+        );
+      return true;
+    }),
   );
 }
 
@@ -38,6 +48,7 @@ export interface SectionSummary {
 // Returns a reactive summary lookup for each section.
 export function useSectionSummary(): (key: SectionKey) => SectionSummary {
   const { state } = useGithub();
+  const tivo = useTivo();
   const theme = useTheme();
 
   return (key) => {
@@ -92,6 +103,12 @@ export function useSectionSummary(): (key: SectionKey) => SectionSummary {
           ? { text: `! ${unmet}`, color: theme.warning }
           : { text: "ready", color: theme.success };
       }
+      case SectionKey.TiVo:
+        if (tivo.state.error) return { text: "!", color: theme.warning };
+        return {
+          text: `${tivo.state.files.length} files`,
+          color: theme.textMuted,
+        };
       default:
         return { text: "", color: theme.textMuted };
     }

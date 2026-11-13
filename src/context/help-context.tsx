@@ -12,6 +12,7 @@ import {
 } from "solid-js";
 import { useGithub } from "./github";
 import type { WorkflowGroup } from "@/github/status-utils";
+import type { ChangedFile } from "@/git/history";
 import type {
   CheckRun,
   FeedItem,
@@ -29,7 +30,9 @@ export type SelectedItem =
   | { kind: "workflow"; group: WorkflowGroup; expanded: boolean }
   | { kind: "job"; check: CheckRun }
   | { kind: "blocker"; blocker: MergeBlocker }
-  | { kind: "queueEntry"; item: MergeQueueItem };
+  | { kind: "queueEntry"; item: MergeQueueItem }
+  | { kind: "tivoFile"; file: ChangedFile }
+  | { kind: "tivoPlayer"; blame: boolean };
 
 export interface HelpContext {
   activeSection: SectionKey;

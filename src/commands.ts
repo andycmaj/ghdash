@@ -44,6 +44,21 @@ export const Commands = {
   // Open the selected Actions job's raw log in $EDITOR
   OPEN_JOB_LOGS: "content.job.logs",
 
+  // TiVo: scrub a file through the PR's commits
+  TIVO_OPEN: "tivo.open",
+  TIVO_BACK: "tivo.back",
+  TIVO_NEXT: "tivo.next",
+  TIVO_PREV: "tivo.prev",
+  TIVO_FIRST: "tivo.first",
+  TIVO_LAST: "tivo.last",
+  TIVO_BLAME: "tivo.blame",
+  TIVO_HUNK_NEXT: "tivo.hunk.next",
+  TIVO_HUNK_PREV: "tivo.hunk.prev",
+  TIVO_FILE_NEXT: "tivo.file.next",
+  TIVO_FILE_PREV: "tivo.file.prev",
+  SCROLL_HALF_DOWN: "scroll.half.down",
+  SCROLL_HALF_UP: "scroll.half.up",
+
   // Embedded terminal (job logs)
   TERMINAL_DETACH: "terminal.detach",
 

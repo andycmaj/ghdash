@@ -27,7 +27,7 @@ export interface FrameRow {
   strength: number;
 }
 
-const easeOut = (t: number) => 1 - (1 - t) * (1 - t);
+export const easeOut = (t: number) => 1 - (1 - t) * (1 - t);
 
 export function progress(elapsedMs: number, durationMs = ANIMATION_MS): number {
   if (durationMs <= 0) return 1;

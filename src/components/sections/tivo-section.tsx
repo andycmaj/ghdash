@@ -3,6 +3,7 @@
 // its viewport, so large files and per-frame animation stay cheap.
 
 import {
+  batch,
   createEffect,
   createMemo,
   createSignal,
@@ -23,6 +24,7 @@ import { truncate } from "@/utils/truncate";
 import {
   ANIMATION_MS,
   anchorTop,
+  easeOut,
   FRAME_MS,
   frameRows,
   progress,
@@ -32,6 +34,7 @@ import {
   type Tone,
 } from "@/tivo/animation";
 import { changedLines, diffLines, type DiffOp } from "@/tivo/line-diff";
+import { layoutRail, type RailStyle } from "@/tivo/rail";
 import type { Snapshot } from "@/tivo/blame";
 import type { Theme } from "@/theme/theme";
 import { Marker } from "./common";
@@ -102,12 +105,23 @@ export function TivoSection(props: {
   // Viewport top as a line index in the shown snapshot.
   const [top, setTop] = createSignal(0);
   let timer: ReturnType<typeof setInterval> | undefined;
-  let running: { ops: DiffOp[]; start: number } | null = null;
+  let running: {
+    ops: DiffOp[];
+    start: number;
+    from: number;
+    to: number;
+  } | null = null;
+  // Fractional stop index of the rail's playhead marker, so it slides
+  // between dots in step with the content animation.
+  const [railPos, setRailPos] = createSignal(0);
 
   function snap() {
     if (timer) clearInterval(timer);
     timer = undefined;
-    if (running) setRows(frameRows(running.ops, 1));
+    if (running) {
+      setRows(frameRows(running.ops, 1));
+      setRailPos(running.to);
+    }
     running = null;
   }
   onCleanup(snap);
@@ -125,6 +139,7 @@ export function TivoSection(props: {
     setShown({ path, index, lines });
     if (!from || from.path !== path) {
       setRows(settledRows(lines ?? []));
+      setRailPos(index);
       setTop(0);
       return;
     }
@@ -138,13 +153,20 @@ export function TivoSection(props: {
         newLength: lines?.length ?? 0,
       }),
     );
-    running = { ops, start: Date.now() };
+    running = { ops, start: Date.now(), from: from.index, to: index };
     setRows(frameRows(ops, 0));
+    setRailPos(from.index);
     timer = setInterval(() => {
       if (!running) return;
       const t = progress(Date.now() - running.start, ANIMATION_MS);
       if (t >= 1) snap();
-      else setRows(frameRows(running.ops, t));
+      else {
+        const r = running;
+        batch(() => {
+          setRows(frameRows(r.ops, t));
+          setRailPos(r.from + (r.to - r.from) * easeOut(t));
+        });
+      }
     }, FRAME_MS);
   }
 
@@ -437,29 +459,59 @@ export function TivoSection(props: {
   }
 
   function TimelineBar(p: { width: number }) {
-    // Ticks are fixed width; show a window around the playhead that fits.
-    const TICK = 9;
-    const windowed = createMemo(() => {
-      const stops = tivo.state.stops;
-      const fit = Math.max(1, Math.floor((p.width - 12) / TICK));
-      const half = Math.floor(fit / 2);
-      const start = Math.max(
-        0,
-        Math.min(tivo.state.playhead - half, stops.length - fit),
-      );
-      return {
-        start,
-        end: Math.min(stops.length, start + fit),
-      };
-    });
-    const ticks = createMemo(() =>
-      tivo.state.stops
-        .slice(windowed().start, windowed().end)
-        .map((s, i) => ({ stop: s, index: windowed().start + i })),
+    const railColor = (style: RailStyle): string | undefined => {
+      switch (style) {
+        case "trackPast":
+        case "dotPast":
+        case "label":
+          return theme.primary;
+        case "cursor":
+        case "labelActive":
+          return theme.accent;
+        case "base":
+          return theme.success;
+        case "mergePast":
+        case "mergeFuture":
+        case "labelMerge":
+          return theme.info;
+        default:
+          return theme.textMuted;
+      }
+    };
+    const rail = createMemo(() =>
+      layoutRail(
+        tivo.state.stops.map((s, i) => ({
+          label: i === 0 ? "base" : s.shortSha,
+          isMerge: s.isMerge,
+        })),
+        tivo.state.playhead,
+        railPos(),
+        p.width,
+      ),
+    );
+    const RailRow = (r: { runs: { text: string; style: RailStyle }[] }) => (
+      <box flexDirection="row">
+        <For each={r.runs}>
+          {(run) => (
+            <text
+              fg={railColor(run.style)}
+              attributes={
+                run.style === "labelActive" || run.style === "cursor" ? 1 : 0
+              }
+            >
+              {run.text}
+            </text>
+          )}
+        </For>
+      </box>
     );
     return (
       <box flexDirection="column" marginBottom={1}>
-        <box flexDirection="row" justifyContent="space-between">
+        <box
+          flexDirection="row"
+          justifyContent="space-between"
+          marginBottom={1}
+        >
           <text fg={theme.text} attributes={1}>
             {truncate(tivo.state.path ?? "", Math.max(10, p.width - 24))}
           </text>
@@ -470,42 +522,8 @@ export function TivoSection(props: {
             {tivo.state.blame ? " · blame" : ""}
           </text>
         </box>
-        <box flexDirection="row">
-          <text fg={theme.textMuted}>{windowed().start > 0 ? "… " : "  "}</text>
-          <For each={ticks()}>
-            {(t) => {
-              const active = () => t.index === tivo.state.playhead;
-              const label = () =>
-                (t.index === 0 ? "base" : t.stop.shortSha) +
-                (t.stop.isMerge ? "⑂" : "");
-              return (
-                <box
-                  flexDirection="row"
-                  backgroundColor={active() ? theme.primary : undefined}
-                >
-                  <text
-                    fg={
-                      active()
-                        ? theme.background
-                        : t.stop.isMerge
-                          ? theme.info
-                          : t.index <= tivo.state.playhead
-                            ? theme.text
-                            : theme.textMuted
-                    }
-                    attributes={active() ? 1 : 0}
-                  >
-                    {` ${label()} `.padEnd(TICK - 1)}
-                  </text>
-                  <text fg={theme.textMuted}>│</text>
-                </box>
-              );
-            }}
-          </For>
-          <text fg={theme.textMuted}>
-            {windowed().end < tivo.state.stops.length ? " …" : ""}
-          </text>
-        </box>
+        <RailRow runs={rail().labels} />
+        <RailRow runs={rail().track} />
       </box>
     );
   }

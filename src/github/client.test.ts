@@ -217,7 +217,7 @@ describe("GithubClient review inference", () => {
   });
 });
 
-// valstro/omskit#16091 (ghdash#7): every workflow ran twice on one SHA, 168
+// example-org/example-repo#16091 (ghdash#7): every workflow ran twice on one SHA, 168
 // contexts in all, and the only failing and pending jobs sit past the first
 // page of 100.
 const OLD_RUN = { number: 9263, createdAt: "2026-11-12T18:04:00Z" };

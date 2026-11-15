@@ -216,16 +216,19 @@ export function TivoSection(props: {
     return all.slice(start, start + height());
   });
 
-  // Lines changed between merge-base and the playhead stay marked in the gutter.
-  // Where this commit's changes start, for `[` / `]`. The last jump target is
-  // remembered so a hunk near the end (where scrolling clamps) isn't re-found.
-  const hunks = createMemo(() => {
+  // The shown commit's own diff against the stop before it; the gutter marks
+  // and `[` / `]` both follow this commit, not the whole PR.
+  const commitOps = createMemo((): DiffOp[] => {
     const s = shown();
     if (!s || s.index === 0) return [];
     const prev = tivo.snapshot(s.index - 1);
     if (prev === undefined) return [];
-    return hunkStarts(diffLines(prev ?? [], s.lines ?? []));
+    return diffLines(prev ?? [], s.lines ?? []);
   });
+  const hunks = createMemo(() => hunkStarts(commitOps()));
+  const touched = createMemo(() => changedLines(commitOps()));
+  // The last jump target is remembered so a hunk near the end (where
+  // scrolling clamps) isn't re-found.
   let lastHunk: { line: number; top: number } | null = null;
   createEffect(on(shown, () => (lastHunk = null)));
 
@@ -269,13 +272,6 @@ export function TivoSection(props: {
       },
     ),
   );
-
-  const touched = createMemo(() => {
-    const s = shown();
-    const base = tivo.snapshot(0);
-    if (!s || base === undefined || s.index === 0) return new Set<number>();
-    return changedLines(diffLines(base ?? [], s.lines ?? []));
-  });
 
   const blame = createMemo(() => {
     const s = shown();

@@ -267,11 +267,11 @@ export function TivoProvider(props: ParentProps) {
     return snapshots.get(keyFor(stop.sha, state.path));
   }
 
-  // Neighbours of the playhead, plus merge-base for the touched-line gutter
-  // and every earlier stop while blame is on.
+  // Neighbours of the playhead (the one before feeds the commit's gutter
+  // marks), plus every earlier stop while blame is on.
   function prefetch() {
     const p = state.playhead;
-    for (const i of [p, p - 1, p + 1, 0]) {
+    for (const i of [p, p - 1, p + 1]) {
       if (i >= 0 && i < state.stops.length) void load(i);
     }
     if (state.blame) for (let i = 0; i < p; i++) void load(i);

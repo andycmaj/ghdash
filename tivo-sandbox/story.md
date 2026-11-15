@@ -37,3 +37,18 @@ Line 37 of the story.
 Line 38 was rewritten in commit 2.
 Line 39 of the story.
 Line 40 of the story.
+Appended line 1 in commit 5.
+Appended line 2 in commit 5.
+Appended line 3 in commit 5.
+Appended line 4 in commit 5.
+Appended line 5 in commit 5.
+Appended line 6 in commit 5.
+Appended line 7 in commit 5.
+Appended line 8 in commit 5.
+Appended line 9 in commit 5.
+Appended line 10 in commit 5.
+Appended line 11 in commit 5.
+Appended line 12 in commit 5.
+Appended line 13 in commit 5.
+Appended line 14 in commit 5.
+Appended line 15 in commit 5.

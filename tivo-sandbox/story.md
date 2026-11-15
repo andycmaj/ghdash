@@ -12,12 +12,11 @@ Line 11 of the story.
 Line 12 of the story.
 Line 13 of the story.
 Line 14 of the story.
-Line 15 of the story.
-Line 16 of the story.
-Line 17 of the story.
 Line 18 of the story.
 Line 19 of the story.
 Line 20 of the story.
+Inserted after line 20 in commit 3.
+Another inserted line in commit 3.
 Line 21 of the story.
 Line 22 of the story.
 Line 23 of the story.

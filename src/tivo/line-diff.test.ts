@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   adjacentHunk,
-  changedLines,
   diffLines,
+  gutterMarks,
   hunkStarts,
   type DiffOp,
 } from "./line-diff";
@@ -88,10 +88,40 @@ describe("diffLines", () => {
   });
 });
 
-describe("changedLines", () => {
-  test("collects new-side indexes of adds and modifies", () => {
-    const ops = diffLines(["a", "b", "c"], ["a", "B", "c", "d"]);
-    expect([...changedLines(ops)].sort((x, y) => x - y)).toEqual([1, 3]);
+describe("gutterMarks", () => {
+  const marks = (a: string[], b: string[]) =>
+    [...gutterMarks(diffLines(a, b))].sort(([x], [y]) => x - y);
+
+  test("marks adds and modifies on their new-side lines", () => {
+    expect(marks(["a", "b", "c"], ["a", "B", "c", "d"])).toEqual([
+      [1, "modify"],
+      [3, "add"],
+    ]);
+  });
+
+  test("a new file marks every line as added", () => {
+    expect(marks([], ["x", "y"])).toEqual([
+      [0, "add"],
+      [1, "add"],
+    ]);
+  });
+
+  test("a removal marks the line above the gap", () => {
+    expect(marks(["a", "b", "c"], ["a", "c"])).toEqual([[0, "removedBelow"]]);
+    expect(marks(["a", "b", "c"], ["a", "b"])).toEqual([[1, "removedBelow"]]);
+  });
+
+  test("a removal at the top marks the first line", () => {
+    expect(marks(["a", "b", "c"], ["b", "c"])).toEqual([[0, "removedAbove"]]);
+  });
+
+  test("a line's own change wins over a neighbouring removal", () => {
+    expect(marks(["a", "b", "c"], ["A", "c"])).toEqual([[0, "modify"]]);
+  });
+
+  test("unchanged lines and emptied files get no marks", () => {
+    expect(marks(["a"], ["a"])).toEqual([]);
+    expect(marks(["a", "b"], [])).toEqual([]);
   });
 });
 

@@ -35,10 +35,11 @@ import {
 } from "@/tivo/animation";
 import {
   adjacentHunk,
-  changedLines,
   diffLines,
+  gutterMarks,
   hunkStarts,
   type DiffOp,
+  type GutterMark,
 } from "@/tivo/line-diff";
 import { useToast } from "@/context/toast";
 import { layoutRail, type RailStyle } from "@/tivo/rail";
@@ -64,6 +65,18 @@ function rowBackground(theme: Theme, row: FrameRow): string | undefined {
   if (HEX.test(color) && HEX.test(bg))
     return mix(bg, color, row.strength * 0.6);
   return row.strength > 0.3 ? color : undefined;
+}
+
+function markColor(theme: Theme, mark: GutterMark | undefined) {
+  if (mark === "add") return theme.success;
+  if (mark === "modify") return theme.warning;
+  return theme.error;
+}
+
+function markGlyph(mark: GutterMark | undefined): string {
+  if (mark === "removedBelow") return "▁";
+  if (mark === "removedAbove") return "▔";
+  return mark ? "▎" : " ";
 }
 
 const expandTabs = (text: string) => text.replace(/\t/g, "  ");
@@ -226,7 +239,7 @@ export function TivoSection(props: {
     return diffLines(prev ?? [], s.lines ?? []);
   });
   const hunks = createMemo(() => hunkStarts(commitOps()));
-  const touched = createMemo(() => changedLines(commitOps()));
+  const marks = createMemo(() => gutterMarks(commitOps()));
   // The last jump target is remembered so a hunk near the end (where
   // scrolling clamps) isn't re-found.
   let lastHunk: { line: number; top: number } | null = null;
@@ -469,9 +482,7 @@ export function TivoSection(props: {
                     {(row) => (
                       <PlayerRow
                         row={row()}
-                        touched={
-                          row().line !== null && touched().has(row().line!)
-                        }
+                        mark={marks().get(row().line ?? -1)}
                         blame={blame()}
                         gutterWidth={gutterWidth()}
                         textWidth={textWidth()}
@@ -489,7 +500,7 @@ export function TivoSection(props: {
 
   function PlayerRow(p: {
     row: FrameRow;
-    touched: boolean;
+    mark: GutterMark | undefined;
     blame: number[] | undefined;
     gutterWidth: number;
     textWidth: number;
@@ -506,7 +517,7 @@ export function TivoSection(props: {
     const blameHot = () => origin() === tivo.state.playhead && origin() !== 0;
     return (
       <box flexDirection="row" backgroundColor={rowBackground(theme, p.row)}>
-        <text fg={theme.accent}>{p.touched ? "▎" : " "}</text>
+        <text fg={markColor(theme, p.mark)}>{markGlyph(p.mark)}</text>
         <Show when={tivo.state.blame}>
           <text
             fg={blameHot() ? theme.primary : theme.textMuted}

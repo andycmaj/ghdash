@@ -80,8 +80,10 @@ Content and animation
   lines, scroll so the first changed hunk is visible (top third). Otherwise
   keep the line under the top of the viewport stable.
 - **R12** Lines the playhead commit changed (its diff against the previous
-  stop) get a subtle gutter marker, so that commit's change stays visible
-  after animations fade. Merge-base has none.
+  stop) get a gutter sign, so that commit's change stays visible after
+  animations fade: green `▎` added, yellow `▎` modified, red `▁` under the
+  line above removed lines (`▔` on the first line for a removal at the top).
+  Unchanged lines and merge-base have none.
 - **R13** `esc` returns from player to file list; leaving the section
   drops cached content.
 

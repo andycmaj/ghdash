@@ -1,5 +1,5 @@
 Line 1 of the story.
-Line 2 of the story.
+Line 2 was rewritten in commit 2.
 Line 3 of the story.
 Line 4 of the story.
 Line 5 of the story.
@@ -35,6 +35,6 @@ Line 34 of the story.
 Line 35 of the story.
 Line 36 of the story.
 Line 37 of the story.
-Line 38 of the story.
+Line 38 was rewritten in commit 2.
 Line 39 of the story.
 Line 40 of the story.

@@ -126,11 +126,24 @@ export function diffLines(a: string[], b: string[]): DiffOp[] {
   return ops;
 }
 
-// Indexes of lines in `b` that are new or changed relative to `a`.
-export function changedLines(ops: DiffOp[]): Set<number> {
-  const out = new Set<number>();
+// How a line in `b` changed relative to `a`, for the gutter. Removed lines
+// have no row of their own, so they mark the line just above the gap (or the
+// first line, for a removal at the top), like editor git signs.
+export type GutterMark = "add" | "modify" | "removedBelow" | "removedAbove";
+
+export function gutterMarks(ops: DiffOp[]): Map<number, GutterMark> {
+  const out = new Map<number, GutterMark>();
+  const length = ops.reduce((n, op) => (op.kind === "remove" ? n : n + 1), 0);
+  let bNext = 0;
   for (const op of ops) {
-    if (op.kind === "add" || op.kind === "modify") out.add(op.b);
+    if (op.kind === "remove") {
+      if (bNext > 0) out.set(bNext - 1, "removedBelow");
+      else if (length > 0) out.set(0, "removedAbove");
+    } else bNext = op.b + 1;
+  }
+  // A line's own change says more than a removal next to it.
+  for (const op of ops) {
+    if (op.kind === "add" || op.kind === "modify") out.set(op.b, op.kind);
   }
   return out;
 }

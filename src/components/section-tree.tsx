@@ -157,7 +157,10 @@ export function SectionTree() {
             {state.pr!.title}
           </text>
           <text fg={headerSelected() ? headerFg() : theme.textMuted}>
-            {truncate(`${state.pr!.headRef} → ${state.pr!.baseRef}`, 36)}
+            {truncate(state.pr!.headRef, 36)}
+          </text>
+          <text fg={headerSelected() ? headerFg() : theme.textMuted}>
+            {truncate(`→ ${state.pr!.baseRef}`, 36)}
           </text>
         </Show>
       </box>

@@ -98,11 +98,13 @@ export const keymap: KeymapTable = {
       key: "return",
       cmd: Commands.TOGGLE_EXPAND,
       desc: "expand/collapse",
-      // Enter toggles workflow rows and long/threaded feed cards; on PR Info
-      // cards it edits (shown as `e`).
+      // Enter toggles workflow rows, long/threaded feed cards and large
+      // Mergeability team rows; on PR Info cards it edits (shown as `e`).
       relevant: (ctx) =>
         ctx.selectedItem?.kind === "workflow" ||
-        (ctx.selectedItem?.kind === "feedItem" && ctx.selectedItem.collapsible),
+        (ctx.selectedItem?.kind === "feedItem" &&
+          ctx.selectedItem.collapsible) ||
+        (ctx.selectedItem?.kind === "blocker" && ctx.selectedItem.expandable),
     },
     {
       key: "a",

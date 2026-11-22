@@ -51,7 +51,10 @@ import {
   buildActionsNodes,
   type ActionsNode,
 } from "./sections/actions-section";
-import { MergeabilitySection } from "./sections/mergeability-section";
+import {
+  MergeabilitySection,
+  blockerExpandable,
+} from "./sections/mergeability-section";
 import { MergeQueueSection } from "./sections/merge-queue-section";
 import { TivoSection } from "./sections/tivo-section";
 import { useTivo } from "../context/tivo";
@@ -99,6 +102,10 @@ export function SectionView() {
 
   // Whether job annotations are rendered under the Actions tree (toggled by `a`).
   const [showAnnotations, setShowAnnotations] = createSignal(true);
+  // Mergeability team rows showing every member, by team slug.
+  const [teamExpanded, setTeamExpanded] = createStore<
+    Record<string, boolean | undefined>
+  >({});
 
   // Usable text width inside the content pane (minus sidebar, borders, padding).
   const bodyWidth = createMemo(() => {
@@ -225,7 +232,13 @@ export function SectionView() {
       }
       case SectionKey.Mergeability: {
         const blocker = state.mergeBlockers[index];
-        return blocker ? { kind: "blocker", blocker } : null;
+        if (!blocker) return null;
+        const expanded = !!blocker.team && !!teamExpanded[blocker.team.slug];
+        return {
+          kind: "blocker",
+          blocker,
+          expandable: blockerExpandable(blocker, bodyWidth(), expanded),
+        };
       }
       // TivoSection owns its own cursor; only whether a file is open matters
       // for the footer.
@@ -289,6 +302,15 @@ export function SectionView() {
   function activate() {
     if (state.selectedSection === SectionKey.Info) {
       editCurrentCard();
+      return;
+    }
+    if (state.selectedSection === SectionKey.Mergeability) {
+      const team = state.mergeBlockers[cursor()]?.team;
+      if (team) {
+        setTeamExpanded(team.slug, !teamExpanded[team.slug]);
+        const id = childId(cursor());
+        setTimeout(() => scrollRef?.scrollChildIntoView(id), 0);
+      }
       return;
     }
     if (state.selectedSection === SectionKey.Feed) {
@@ -502,6 +524,7 @@ export function SectionView() {
                 width={bodyWidth()}
                 selected={activeCursor}
                 idFor={childId}
+                teamExpanded={(slug) => !!teamExpanded[slug]}
               />
             </Match>
           </Switch>

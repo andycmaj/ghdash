@@ -7,3 +7,8 @@
 # release workflow. The paths that actually need the Solid transform supply it
 # themselves: `dev`/`debug` pass `--preload @opentui/solid/preload`, and
 # script/build.ts registers the Solid plugin directly via Bun.build.
+
+# `bun test` alone needs the Solid transform for the .test.tsx render tests.
+# Scoped to [test] so it doesn't reach the `bun run` scripts described above.
+[test]
+preload = ["@opentui/solid/preload"]

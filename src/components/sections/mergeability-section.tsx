@@ -10,8 +10,32 @@ import { canMerge } from "@/github/status-utils";
 import { PRStatus, type MergeBlocker } from "@/github/types";
 import { Marker, type SectionProps } from "./common";
 import { mergeQueueStateLabel } from "./merge-queue-section";
+import { layoutTeam, type TeamLine, type TeamTone } from "./team-layout";
 
-export function MergeabilitySection(props: SectionProps) {
+// Marker, gap, glyph, gap.
+export const BLOCKER_GUTTER = 4;
+
+// Whether Enter on this row would change it: a team row with members hidden,
+// or one already expanded.
+export function blockerExpandable(
+  blocker: MergeBlocker,
+  width: number,
+  expanded: boolean,
+): boolean {
+  if (!blocker.team) return false;
+  if (expanded) return true;
+  const layout = layoutTeam(
+    blocker.team,
+    blocker.satisfied,
+    width - BLOCKER_GUTTER,
+    false,
+  );
+  return layout.hidden > 0;
+}
+
+export function MergeabilitySection(
+  props: SectionProps & { teamExpanded: (slug: string) => boolean },
+) {
   const { state } = useGithub();
   const theme = useTheme();
 
@@ -62,6 +86,9 @@ export function MergeabilitySection(props: SectionProps) {
                 width={props.width}
                 id={props.idFor(index())}
                 selected={props.selected() === index()}
+                expanded={
+                  !!blocker.team && props.teamExpanded(blocker.team.slug)
+                }
               />
             )}
           </For>
@@ -80,19 +107,41 @@ export function MergeabilitySection(props: SectionProps) {
   );
 }
 
-function BlockerRow(props: {
+export function BlockerRow(props: {
   blocker: MergeBlocker;
   width: number;
   id: string;
   selected: boolean;
+  expanded: boolean;
 }) {
   const theme = useTheme();
-  const blocker = props.blocker;
-  const glyph = () => (blocker.satisfied ? "✓" : "✗");
-  const color = () => (blocker.satisfied ? theme.success : theme.error);
-  const lines = createMemo(() =>
-    wrapText(blocker.description, props.width - 2),
-  );
+  const glyph = () => (props.blocker.satisfied ? "✓" : "✗");
+  const color = () => (props.blocker.satisfied ? theme.success : theme.error);
+  const textWidth = () => props.width - BLOCKER_GUTTER;
+  const lines = createMemo((): TeamLine[] => {
+    const blocker = props.blocker;
+    if (blocker.team) {
+      const layout = layoutTeam(
+        blocker.team,
+        blocker.satisfied,
+        textWidth(),
+        props.expanded,
+      );
+      return [...layout.header, ...layout.members];
+    }
+    const tone: TeamTone = blocker.satisfied ? "muted" : "text";
+    return wrapText(blocker.description, textWidth()).map((text) => [
+      { text, tone },
+    ]);
+  });
+  const toneColor = (tone: TeamTone) =>
+    ({
+      approved: theme.success,
+      "changes-requested": theme.error,
+      requested: theme.textMuted,
+      muted: theme.textMuted,
+      text: theme.text,
+    })[tone];
 
   return (
     <box id={props.id} flexDirection="row" gap={1}>
@@ -101,8 +150,12 @@ function BlockerRow(props: {
       <box flexDirection="column">
         <For each={lines()}>
           {(line) => (
-            <text fg={blocker.satisfied ? theme.textMuted : theme.text}>
-              {line}
+            <text>
+              <For each={line}>
+                {(span) => (
+                  <span style={{ fg: toneColor(span.tone) }}>{span.text}</span>
+                )}
+              </For>
             </text>
           )}
         </For>

@@ -10,6 +10,8 @@ import {
   type ReviewStatus,
   type ReviewerRequirement,
   type ReviewThread,
+  type TeamMember,
+  type TeamMemberReview,
   type WorkflowRunRef,
 } from "./types";
 
@@ -458,13 +460,20 @@ function at(logins: string[]): string[] {
   return logins.map((l) => `@${l}`);
 }
 
-function requirementBlocker(req: ReviewerRequirement): MergeBlocker {
+function requirementBlocker(
+  req: ReviewerRequirement,
+  changesRequestedBy: string[],
+): MergeBlocker {
+  const team = req.isTeam
+    ? { slug: req.reviewer, members: teamMembers(req, changesRequestedBy) }
+    : undefined;
   if (req.satisfied) {
     const via = req.isTeam ? ` by ${names(at(req.approvedBy))}` : "";
     return {
       kind: MergeBlockerKind.RequiredReview,
       description: `${req.reviewer} approved${via}`,
       satisfied: true,
+      team,
     };
   }
   const who = !req.isTeam
@@ -478,7 +487,44 @@ function requirementBlocker(req: ReviewerRequirement): MergeBlocker {
     kind: MergeBlockerKind.RequiredReview,
     description: `Needs approval from ${req.reviewer}${who}`,
     satisfied: false,
+    team,
   };
+}
+
+const MEMBER_ORDER: Record<TeamMemberReview, number> = {
+  approved: 0,
+  "changes-requested": 1,
+  requested: 2,
+};
+
+// Everyone who can act for the team, those who have reviewed first. Approvers
+// credited via onBehalfOf may not be in the visible member list.
+function teamMembers(
+  req: ReviewerRequirement,
+  changesRequestedBy: string[],
+): TeamMember[] | null {
+  if (req.candidates === null && req.approvedBy.length === 0) return null;
+  const approved = new Set(req.approvedBy.map((l) => l.toLowerCase()));
+  const changes = new Set(changesRequestedBy.map((l) => l.toLowerCase()));
+  const byLogin = new Map<string, string>();
+  for (const login of [...req.approvedBy, ...(req.candidates ?? [])]) {
+    const key = login.toLowerCase();
+    if (!byLogin.has(key)) byLogin.set(key, login);
+  }
+  return [...byLogin.entries()]
+    .map(([key, login]): TeamMember => ({
+      login,
+      review: approved.has(key)
+        ? "approved"
+        : changes.has(key)
+          ? "changes-requested"
+          : "requested",
+    }))
+    .sort(
+      (a, b) =>
+        MEMBER_ORDER[a.review] - MEMBER_ORDER[b.review] ||
+        a.login.localeCompare(b.login, undefined, { sensitivity: "base" }),
+    );
 }
 
 // The review rows: required approval count, one row per required reviewer, and
@@ -505,7 +551,14 @@ function reviewBlockers(review: ReviewStatus): MergeBlocker[] {
     });
   }
 
-  rows.push(...review.requirements.map(requirementBlocker));
+  // Requirements the signed-in user can satisfy come first.
+  const mine = review.requirements.filter((r) => r.viewerIsMember);
+  const others = review.requirements.filter((r) => !r.viewerIsMember);
+  rows.push(
+    ...[...mine, ...others].map((r) =>
+      requirementBlocker(r, review.changesRequestedBy),
+    ),
+  );
 
   if (review.changesRequestedBy.length > 0) {
     rows.push({

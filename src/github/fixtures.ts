@@ -12,8 +12,9 @@ import {
   type CheckRun,
   type PRDashboard,
   type RepoContext,
+  type ReviewerRequirement,
 } from "./types";
-import { markSupersededRuns } from "./status-utils";
+import { computeMergeBlockers, markSupersededRuns } from "./status-utils";
 
 export interface Fixture {
   repo: RepoContext;
@@ -240,6 +241,29 @@ function duplicateRun(
   ];
 }
 
+function devs(n: number): string[] {
+  return Array.from(
+    { length: n },
+    (_, i) => `dev${String(i + 1).padStart(2, "0")}`,
+  );
+}
+
+function teamRequirement(
+  reviewer: string,
+  candidates: string[],
+  viewerIsMember: boolean,
+): ReviewerRequirement {
+  const approvedBy = candidates.filter((c) => c === "dev01");
+  return {
+    reviewer,
+    isTeam: true,
+    approvedBy,
+    candidates,
+    satisfied: approvedBy.length > 0,
+    viewerIsMember,
+  };
+}
+
 function dashboard(over: Partial<PRDashboard> = {}): PRDashboard {
   return {
     pr: basePr,
@@ -370,6 +394,46 @@ export const FIXTURES: Record<string, Fixture> = {
           satisfied: true,
         },
       ],
+    }),
+  },
+
+  // Many required teams with many members, for the Mergeability team rows.
+  teams: {
+    repo: baseRepo,
+    dashboard: dashboard({
+      pr: { ...basePr, reviewDecision: "REVIEW_REQUIRED" },
+      mergeBlockers: computeMergeBlockers(
+        { ...basePr, reviewDecision: "REVIEW_REQUIRED" },
+        passingChecks,
+        baseThreads,
+        {
+          required: true,
+          requiredApprovals: 2,
+          approvedBy: ["dev01"],
+          changesRequestedBy: ["dev02"],
+          requirements: [
+            teamRequirement("octo-org/web", ["dev01", "dev30", "dev31"], false),
+            teamRequirement(
+              "octo-org/platform-infrastructure-reviewers",
+              devs(24),
+              true,
+            ),
+            teamRequirement("octo-org/payments", devs(9).slice(2), false),
+            {
+              reviewer: "octo-org/secret-team",
+              isTeam: true,
+              approvedBy: [],
+              candidates: null,
+              satisfied: false,
+              viewerIsMember: false,
+            },
+          ],
+          otherRequests: [],
+          satisfied: false,
+          githubDecision: "REVIEW_REQUIRED",
+        },
+        CheckStatus.Success,
+      ),
     }),
   },
 

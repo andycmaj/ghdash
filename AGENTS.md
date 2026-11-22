@@ -60,7 +60,10 @@ layer, so keys only ever reach one handler.
   required (code-owner) team stays pending after one of its members approves.
   `review-status.ts` credits a requested team with any member's latest
   approval (membership via `organization.team.members`, cached 10 min in the
-  client; needs `read:org`). GraphQL calls are spaced 1s apart by octokit's
+  client; needs `read:org`). A required team's blocker row carries `team`
+  (members tagged approved / changes requested / requested), laid out by the
+  pure `components/sections/team-layout.ts`; the signed-in user's teams sort
+  first. GraphQL calls are spaced 1s apart by octokit's
   throttler, so the membership query costs a second when not cached.
   Checks: a commit's rollup contexts are paged past the first 100 by commit
   node id (`allContexts`). Jobs group per workflow *run*; when one SHA has
@@ -87,6 +90,10 @@ layer, so keys only ever reach one handler.
 This app is a TUI, and as such won't be able to show output on stdout.
 
 - use `bun dev` to start the app (run it from a repo dir whose current branch has an open PR)
+- `GHDASH_FIXTURE=teams bun run dev:fixture` shows canned dashboards (see `src/github/fixtures.ts`)
+- component render tests are `*.test.tsx` using `testRender` from `@opentui/solid`
+  (bunfig's `[test]` preload supplies the Solid transform), e.g.
+  `components/sections/mergeability-section.test.tsx`
 - use `tmux capture-pane` to run tui tests.
 - use a unique tmux session name to prevent conflicts with user-sessions.
 - **NEVER run `tmux kill-server`.** It destroys every tmux session on the machine,

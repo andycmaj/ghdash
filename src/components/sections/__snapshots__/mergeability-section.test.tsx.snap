@@ -1,0 +1,50 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`Mergeability team rows wide terminal 1`] = `
+"  ✗ 1 of 2 required approvals by @dev1 — waiting on @someone
+  ✓ acme/web (3) approved
+    ✓ @dev1  ○ @dev2  ○ @dev3
+▸ ✗ Needs approval from acme/platform-infrastructure-reviewers (24)
+    ✓ @dev1  ✗ @dev2  ○ @dev3  ○ @dev4  ○ @dev5  ○ @dev6  ○ @dev7  ○ @dev8  ○ @dev9  ○ @dev10
+    ○ @dev11  ○ @dev12  ○ @dev13  ○ @dev14  ○ @dev15  ○ @dev16  ○ @dev17  ○ @dev18  +6 more
+  ✗ Needs approval from acme/payments (9)
+    ○ @dev1  ○ @dev2  ○ @dev3  ○ @dev4  ○ @dev5  ○ @dev6  ○ @dev7  ○ @dev8  ○ @dev9
+  ✗ Needs approval from acme/secret-team
+    members not visible"
+`;
+
+exports[`Mergeability team rows narrow terminal 1`] = `
+"  ✗ 1 of 2 required approvals by
+    @dev1 — waiting on @someone
+  ✓ acme/web (3) approved
+    ✓ @dev1  ○ @dev2  ○ @dev3
+▸ ✗ Needs approval from
+    acme/platform-infrastructu… (24)
+    ✓ @dev1  ✗ @dev2  ○ @dev3
+    ○ @dev4  ○ @dev5  +19 more
+  ✗ Needs approval from
+    acme/payments (9)
+    ○ @dev1  ○ @dev2  ○ @dev3
+    ○ @dev4  ○ @dev5  +4 more
+  ✗ Needs approval from
+    acme/secret-team
+    members not visible"
+`;
+
+exports[`Mergeability team rows an expanded team lists every member 1`] = `
+"  ✗ 1 of 2 required approvals by @dev1 — waiting on @someone
+  ✓ acme/web (3) approved
+    ✓ @dev1  ○ @dev2  ○ @dev3
+▸ ✗ Needs approval from
+    acme/platform-infrastructure-reviewers (24)
+    ✓ @dev1  ✗ @dev2  ○ @dev3  ○ @dev4  ○ @dev5  ○ @dev6
+    ○ @dev7  ○ @dev8  ○ @dev9  ○ @dev10  ○ @dev11  ○ @dev12
+    ○ @dev13  ○ @dev14  ○ @dev15  ○ @dev16  ○ @dev17
+    ○ @dev18  ○ @dev19  ○ @dev20  ○ @dev21  ○ @dev22
+    ○ @dev23  ○ @dev24
+  ✗ Needs approval from acme/payments (9)
+    ○ @dev1  ○ @dev2  ○ @dev3  ○ @dev4  ○ @dev5  ○ @dev6
+    ○ @dev7  ○ @dev8  ○ @dev9
+  ✗ Needs approval from acme/secret-team
+    members not visible"
+`;

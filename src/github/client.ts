@@ -238,6 +238,7 @@ const PR_FIELDS = `
 
 const PR_BY_BRANCH_QUERY = `
 query PRByBranch($owner: String!, $repo: String!, $branch: String!) {
+  viewer { login }
   repository(owner: $owner, name: $repo) {
     pullRequests(headRefName: $branch, first: 5, orderBy: {field: UPDATED_AT, direction: DESC}) {
       nodes { ${PR_FIELDS} }
@@ -247,6 +248,7 @@ query PRByBranch($owner: String!, $repo: String!, $branch: String!) {
 
 const PR_BY_NUMBER_QUERY = `
 query PRByNumber($owner: String!, $repo: String!, $number: Int!) {
+  viewer { login }
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) { ${PR_FIELDS} }
   }
@@ -436,7 +438,7 @@ export class GithubClient {
       );
     }
 
-    return this.nodeToDashboard(octokit, node);
+    return this.nodeToDashboard(octokit, node, data.viewer?.login ?? null);
   }
 
   // Fetch a specific PR by number (any state).
@@ -457,7 +459,7 @@ export class GithubClient {
       throw new PrNotFoundError(`PR #${number} not found in ${owner}/${repo}.`);
     }
 
-    return this.nodeToDashboard(octokit, node);
+    return this.nodeToDashboard(octokit, node, data.viewer?.login ?? null);
   }
 
   // The current user's open PRs (as `author:@me`), across every repo they can
@@ -588,6 +590,7 @@ export class GithubClient {
     octokit: Octokit,
     node: PRNode,
     pr: PullRequest,
+    viewer: string | null,
   ): Promise<ReviewStatus | null> {
     if (pr.status !== PRStatus.Open && pr.status !== PRStatus.Draft) {
       return null;
@@ -596,6 +599,7 @@ export class GithubClient {
       const rule = node.baseRef?.refUpdateRule;
       return inferReviewStatus({
         author: pr.author.login,
+        viewer,
         githubDecision: pr.reviewDecision,
         reviewRequests: pr.reviewRequests,
         latestReviews: mapLatestReviews(node),
@@ -695,6 +699,7 @@ export class GithubClient {
   private async nodeToDashboard(
     octokit: Octokit,
     node: PRNode,
+    viewer: string | null,
   ): Promise<PRDashboard> {
     const pr: PullRequest = {
       number: node.number,
@@ -737,7 +742,7 @@ export class GithubClient {
       mapChecks(await this.allContexts(octokit, headCommit)),
     );
     const checksRollup = rollupStatus(headCommit);
-    const review = await this.reviewStatus(octokit, node, pr);
+    const review = await this.reviewStatus(octokit, node, pr, viewer);
     const mergeBlockers = computeMergeBlockers(
       pr,
       checks,
@@ -1133,12 +1138,14 @@ interface PRNode {
 }
 
 interface PRByBranchResult {
+  viewer?: { login: string } | null;
   repository?: {
     pullRequests?: { nodes?: PRNode[] };
   } | null;
 }
 
 interface PRByNumberResult {
+  viewer?: { login: string } | null;
   repository?: {
     pullRequest?: PRNode | null;
   } | null;

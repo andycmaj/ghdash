@@ -29,7 +29,7 @@ export type SelectedItem =
   | { kind: "feedItem"; item: FeedItem; collapsible: boolean }
   | { kind: "workflow"; group: WorkflowGroup; expanded: boolean }
   | { kind: "job"; check: CheckRun }
-  | { kind: "blocker"; blocker: MergeBlocker }
+  | { kind: "blocker"; blocker: MergeBlocker; expandable: boolean }
   | { kind: "queueEntry"; item: MergeQueueItem }
   | { kind: "tivoFile"; file: ChangedFile }
   | { kind: "tivoPlayer"; blame: boolean };

@@ -28,6 +28,8 @@ export interface ReviewInputs {
   protection: { requiredApprovals: number } | null;
   // Members by "org/team-slug" (lowercased); null when membership isn't visible.
   teamMembers: ReadonlyMap<string, string[] | null>;
+  // The signed-in user's login, to list the teams they review for first.
+  viewer?: string | null;
 }
 
 export function requestedTeams(requests: ReviewRequest[]): string[] {
@@ -86,6 +88,7 @@ function resolveRequirement(
   approvedBy: string[],
 ): ReviewerRequirement {
   const author = input.author.toLowerCase();
+  const viewer = input.viewer?.toLowerCase();
 
   if (!request.isTeam) {
     const login = request.name.replace(/^@/, "").toLowerCase();
@@ -96,6 +99,7 @@ function resolveRequirement(
       approvedBy: approvers,
       candidates: login === author ? [] : [login],
       satisfied: approvers.length > 0,
+      viewerIsMember: login === viewer,
     };
   }
 
@@ -108,6 +112,7 @@ function resolveRequirement(
     return !!review?.onBehalfOf.some((t) => t.toLowerCase() === slug);
   });
   memberSet.delete(author);
+  const viewerIsMember = viewer !== undefined && memberSet.has(viewer);
 
   return {
     reviewer: request.name,
@@ -115,5 +120,6 @@ function resolveRequirement(
     approvedBy: approvers,
     candidates: members ? [...memberSet].sort() : null,
     satisfied: approvers.length > 0,
+    viewerIsMember,
   };
 }

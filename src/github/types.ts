@@ -127,6 +127,23 @@ export interface MergeBlocker {
   description: string;
   // true = requirement satisfied (no longer blocking the merge)
   satisfied: boolean;
+  // Set on a required team's row so the view can lay out its members.
+  team?: TeamBlockerDetail;
+}
+
+export type TeamMemberReview = "approved" | "changes-requested" | "requested";
+
+export interface TeamMember {
+  login: string;
+  review: TeamMemberReview;
+}
+
+export interface TeamBlockerDetail {
+  // "org/team-slug"
+  slug: string;
+  // Approved first, then changes requested, then still requested; null when
+  // the team's membership isn't visible to us.
+  members: TeamMember[] | null;
 }
 
 export type Mergeable = "MERGEABLE" | "CONFLICTING" | "UNKNOWN";
@@ -200,6 +217,8 @@ export interface ReviewerRequirement {
   // team's membership isn't visible to us.
   candidates: string[] | null;
   satisfied: boolean;
+  // The signed-in user is the requested reviewer or one of the team's members.
+  viewerIsMember: boolean;
 }
 
 export interface PullRequest {

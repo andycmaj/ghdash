@@ -511,6 +511,7 @@ describe("computeMergeBlockers with inferred review status", () => {
             approvedBy: ["alice"],
             candidates: ["alice"],
             satisfied: true,
+            viewerIsMember: false,
           },
           {
             reviewer: "octo-org/payments",
@@ -518,6 +519,7 @@ describe("computeMergeBlockers with inferred review status", () => {
             approvedBy: [],
             candidates: ["bob", "carol"],
             satisfied: false,
+            viewerIsMember: false,
           },
           {
             reviewer: "@dave",
@@ -525,6 +527,7 @@ describe("computeMergeBlockers with inferred review status", () => {
             approvedBy: [],
             candidates: ["dave"],
             satisfied: false,
+            viewerIsMember: false,
           },
         ],
       }),
@@ -534,6 +537,66 @@ describe("computeMergeBlockers with inferred review status", () => {
       [true, "octo-org/platform approved by @alice"],
       [false, "Needs approval from octo-org/payments — one of @bob, @carol"],
       [false, "Needs approval from @dave"],
+    ]);
+  });
+
+  test("lays out team members, reviewers first, with the viewer's teams first", () => {
+    const rows = reviewRows(
+      status({
+        approvedBy: ["zed"],
+        changesRequestedBy: ["Bob"],
+        requirements: [
+          {
+            reviewer: "octo-org/payments",
+            isTeam: true,
+            approvedBy: [],
+            candidates: ["carol", "dan"],
+            satisfied: false,
+            viewerIsMember: false,
+          },
+          {
+            reviewer: "octo-org/platform",
+            isTeam: true,
+            approvedBy: ["zed"],
+            candidates: ["amy", "bob", "zed"],
+            satisfied: true,
+            viewerIsMember: true,
+          },
+          {
+            reviewer: "octo-org/secret",
+            isTeam: true,
+            approvedBy: [],
+            candidates: null,
+            satisfied: false,
+            viewerIsMember: false,
+          },
+        ],
+      }),
+    );
+    expect(rows.map((r) => r.team?.slug ?? r.description)).toEqual([
+      "Approved by @zed (1 required)",
+      "octo-org/platform",
+      "octo-org/payments",
+      "octo-org/secret",
+      "Changes requested by @Bob",
+    ]);
+    expect(rows.map((r) => r.team).filter(Boolean)).toEqual([
+      {
+        slug: "octo-org/platform",
+        members: [
+          { login: "zed", review: "approved" },
+          { login: "bob", review: "changes-requested" },
+          { login: "amy", review: "requested" },
+        ],
+      },
+      {
+        slug: "octo-org/payments",
+        members: [
+          { login: "carol", review: "requested" },
+          { login: "dan", review: "requested" },
+        ],
+      },
+      { slug: "octo-org/secret", members: null },
     ]);
   });
 
@@ -548,6 +611,7 @@ describe("computeMergeBlockers with inferred review status", () => {
             approvedBy: [],
             candidates: null,
             satisfied: false,
+            viewerIsMember: false,
           },
         ],
       }),

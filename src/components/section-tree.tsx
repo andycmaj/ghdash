@@ -95,6 +95,7 @@ export function SectionTree() {
       (isFocused() ? theme.primary : theme.secondary) ?? "#ffffff",
     );
   });
+  const subtitleFg = () => (headerSelected() ? headerFg() : theme.textMuted);
 
   return (
     <box
@@ -156,10 +157,10 @@ export function SectionTree() {
           >
             {state.pr!.title}
           </text>
-          <text fg={headerSelected() ? headerFg() : theme.textMuted}>
+          <text fg={subtitleFg()}>
             {truncate(state.pr!.headRef, 36)}
           </text>
-          <text fg={headerSelected() ? headerFg() : theme.textMuted}>
+          <text fg={subtitleFg()}>
             {truncate(`→ ${state.pr!.baseRef}`, 36)}
           </text>
         </Show>

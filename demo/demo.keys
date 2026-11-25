@@ -1,0 +1,21 @@
+# Site demo for ghdash, run against GHDASH_FIXTURE=default.
+# Recorded by opentui-app's apps/site/scripts/record.ts.
+wait 800
+key j            # sections: next
+wait 300
+key return       # open section
+wait 900
+key j j j
+wait 600
+key tab
+key k
+key return
+wait 900
+key tab
+key j j
+key return
+wait 900
+key ?
+wait 1500
+key esc
+wait 800

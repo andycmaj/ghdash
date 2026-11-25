@@ -125,3 +125,21 @@ jobs:
             echo "$generated"
           } > "$RUNNER_TEMP/release-notes.md"
           gh release edit "$TAG" --notes-file "$RUNNER_TEMP/release-notes.md" --draft=false
+
+      # Tells the project website (andycmaj/opentui-app) to re-record this
+      # app's demo and keybindings from the new release. Needs a fine-grained
+      # PAT with Contents: read and write on andycmaj/opentui-app in the
+      # SITE_DISPATCH_TOKEN secret; skipped until that is set.
+      - name: Notify the website
+        env:
+          GH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "SITE_DISPATCH_TOKEN not set; skipping"
+            exit 0
+          fi
+          gh api repos/andycmaj/opentui-app/dispatches \
+            -f event_type=app-released \
+            -f "client_payload[app]=ghdash" \
+            -f "client_payload[version]=$TAG"

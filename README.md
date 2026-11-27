@@ -61,6 +61,10 @@ the `owner/repo#number` and URL forms work from anywhere.
 ### Flags
 
 - `--poll <ms>` — poll interval (default 15000, or `pollIntervalMs` from config).
+- `--queue-poll <ms>` — poll interval while the PR sits in the merge queue
+  (default 60000, or `queuedPollIntervalMs` from config). Never faster than
+  `--poll`; an `UNMERGEABLE` queue entry keeps the normal rate, and polling
+  returns to it once the PR leaves the queue. `r` still refreshes at once.
 
 ## Compiling a binary
 
@@ -89,6 +93,7 @@ Loads user settings from `~/.config/ghdash/config.json`:
 {
   "theme": "default",
   "pollIntervalMs": 15000,
+  "queuedPollIntervalMs": 60000,
   "githubToken": "ghp_…"
 }
 ```

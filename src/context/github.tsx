@@ -23,6 +23,7 @@ import { GithubClient } from "../github/client";
 import { getRepoContext } from "../github/repo-context";
 import { fixtureJobLog, loadFixture } from "../github/fixtures";
 import { actionsJobId } from "../github/status-utils";
+import { pollIntervalFor } from "../github/poll-interval";
 import type { PRSpec } from "../github/pr-spec";
 import {
   FeedItemKind,
@@ -43,7 +44,6 @@ import {
 } from "../github/types";
 import type { ConnectionStatus } from "../theme/theme";
 
-const DEFAULT_POLL_MS = 15000;
 const ERROR_BACKOFF_MS = 5000;
 
 interface GithubState {
@@ -100,6 +100,7 @@ const GithubContext = createContext<GithubContextValue>();
 
 export interface GithubProviderProps {
   pollMs?: number;
+  queuedPollMs?: number;
   tokenOverride?: string;
   prSpec?: PRSpec;
 }
@@ -284,7 +285,14 @@ export function GithubProvider(props: ParentProps<GithubProviderProps>) {
         continue;
       }
 
-      yield* waitNextTick(props.pollMs ?? DEFAULT_POLL_MS);
+      // Re-picked every tick, so the PR drops back to the normal rate as soon
+      // as a fetch shows it left the queue.
+      yield* waitNextTick(
+        pollIntervalFor(state.pr, {
+          pollMs: props.pollMs,
+          queuedPollMs: props.queuedPollMs,
+        }),
+      );
     }
   }
 

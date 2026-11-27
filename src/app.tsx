@@ -248,6 +248,7 @@ function AppContent() {
 export interface AppProps {
   theme?: ThemeName;
   pollMs?: number;
+  queuedPollMs?: number;
   tokenOverride?: string;
   prSpec?: PRSpec;
 }
@@ -257,6 +258,7 @@ export function App(props: AppProps) {
     <ThemeProvider name={props.theme}>
       <GithubProvider
         pollMs={props.pollMs}
+        queuedPollMs={props.queuedPollMs}
         tokenOverride={props.tokenOverride}
         prSpec={props.prSpec}
       >

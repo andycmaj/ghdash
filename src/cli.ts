@@ -5,6 +5,8 @@ import { parsePrSpec, type PRSpec } from "./github/pr-spec";
 export interface CLIConfig {
   /** Poll interval override in ms (from --poll), or undefined to use config/default. */
   pollMs?: number;
+  /** Merge-queue poll interval override in ms (from --queue-poll). */
+  queuedPollMs?: number;
   /** Explicit PR target (from the positional arg), or undefined for the current branch. */
   prSpec?: PRSpec;
 }
@@ -28,9 +30,15 @@ const main = defineCommand({
       type: "string",
       description: "Poll interval in milliseconds",
     },
+    "queue-poll": {
+      type: "string",
+      description:
+        "Poll interval in milliseconds while the PR is in the merge queue",
+    },
   },
   run({ args }) {
     const parsedPoll = parseInt(args.poll ?? "", 10);
+    const parsedQueuePoll = parseInt(args["queue-poll"] ?? "", 10);
     const prArg = (args.pr ?? "").trim();
     const prSpec = prArg ? parsePrSpec(prArg) : null;
 
@@ -43,6 +51,7 @@ const main = defineCommand({
 
     config = {
       pollMs: Number.isNaN(parsedPoll) ? undefined : parsedPoll,
+      queuedPollMs: Number.isNaN(parsedQueuePoll) ? undefined : parsedQueuePoll,
       prSpec: prSpec ?? undefined,
     };
   },

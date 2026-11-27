@@ -10,11 +10,13 @@ import { loadUserSettings } from "./config/user-settings";
 const config = await parseCLI();
 const userSettings = await loadUserSettings();
 const pollMs = config.pollMs ?? userSettings.pollIntervalMs;
+const queuedPollMs = config.queuedPollMs ?? userSettings.queuedPollIntervalMs;
 
 await runApp(() => (
   <App
     theme={userSettings.theme}
     pollMs={pollMs}
+    queuedPollMs={queuedPollMs}
     tokenOverride={userSettings.githubToken}
     prSpec={config.prSpec}
   />

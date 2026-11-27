@@ -27,6 +27,8 @@ const UserSettingsSchema = z.object({
     }),
   /** How often to poll GitHub, in milliseconds (default 15000). */
   pollIntervalMs: z.number().positive().optional().catch(undefined),
+  /** Poll interval while the PR is in the merge queue (default 60000). */
+  queuedPollIntervalMs: z.number().positive().optional().catch(undefined),
   /** Optional GitHub token override (otherwise env / `gh auth token`). */
   githubToken: z.string().optional().catch(undefined),
 });
@@ -37,6 +39,7 @@ export interface RuntimeSettings {
   raw: UserSettings;
   theme: ThemeName;
   pollIntervalMs?: number;
+  queuedPollIntervalMs?: number;
   githubToken?: string;
 }
 
@@ -75,6 +78,7 @@ function compileSettings(settings: UserSettings): RuntimeSettings {
     raw: settings,
     theme: settings.theme ?? "default",
     pollIntervalMs: settings.pollIntervalMs,
+    queuedPollIntervalMs: settings.queuedPollIntervalMs,
     githubToken: settings.githubToken,
   };
 }
